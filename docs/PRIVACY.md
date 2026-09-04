@@ -2,7 +2,7 @@
 
 ## Current behavior
 
-DeepFind indexes selected filesystem metadata and supported document terms into a local Lucene directory. The default data directory is `${user.home}/.deepfind`, and `DEEPFIND_DATA_DIRECTORY` can override it. Extraction runs locally under byte, character, concurrency, and time limits. Full extracted text is not retained as a retrievable stored field, but Lucene postings contain searchable terms and must be treated as sensitive local data. Search queries and extracted content are not logged by application code. The application does not send telemetry, load remote fonts, call cloud APIs, or upload indexed metadata or content.
+DeepFind indexes selected filesystem metadata and supported document text into a local Lucene directory. The default data directory is `${user.home}/.deepfind`, and `DEEPFIND_DATA_DIRECTORY` can override it. Extraction runs locally under byte, character, concurrency, and time limits. Lucene stores searchable postings and an extraction-bounded text copy used only to create result snippets; the index must be treated as sensitive local data. Search responses expose only short matching excerpts, and React renders document text without interpreting it as HTML. Search queries and extracted content are not logged by application code. The application does not send telemetry, load remote fonts, call cloud APIs, or upload indexed metadata or content.
 
 ## Product policy
 

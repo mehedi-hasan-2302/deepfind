@@ -14,7 +14,7 @@
 
 ## Indexing and search issues
 
-- If startup reports a Lucene schema mismatch after upgrading from schema version 1, stop DeepFind and remove only the local `<data-directory>\index` directory, then index the selected folder again. Automated rebuild controls are not implemented yet; never remove the source folder.
+- If startup reports a Lucene schema mismatch after upgrading from an earlier schema, stop DeepFind and remove only the local `<data-directory>\index` directory, then index the selected folder again. Automated rebuild controls are not implemented yet; never remove the source folder.
 - Unsupported, oversized, unreadable, disguised, or malformed documents remain filename/path searchable when their metadata can be read, but their contents are not searchable.
 - Content extraction defaults to 20 MiB, 500,000 characters, and 15 seconds per file. Review `deepfind.extraction.*` settings if a legitimate local document is skipped.
 - Scanned/image-only PDFs require future local OCR support and normally provide no searchable text today.

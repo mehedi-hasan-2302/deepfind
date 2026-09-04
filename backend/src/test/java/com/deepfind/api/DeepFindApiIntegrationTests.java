@@ -1,5 +1,6 @@
 package com.deepfind.api;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -75,7 +76,10 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.totalHits").value(1))
                 .andExpect(jsonPath("$.results[0].path")
                         .value(contentFile.toAbsolutePath().normalize().toString()))
-                .andExpect(jsonPath("$.results[0].matchType").value("CONTENT"));
+                .andExpect(jsonPath("$.results[0].matchType").value("CONTENT"))
+                .andExpect(jsonPath("$.results[0].snippet.text").value(containsString("starling")))
+                .andExpect(jsonPath("$.results[0].snippet.highlights[0].start").isNumber())
+                .andExpect(jsonPath("$.results[0].snippet.highlights[0].end").isNumber());
     }
 
     @Test

@@ -12,3 +12,4 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0008 — Validate and isolate platform file actions](0008-platform-file-actions.md)
 - [0009 — Bound and isolate document extraction](0009-bounded-document-extraction.md)
 - [0010 — Add extracted content to Lucene schema version 2](0010-lucene-content-index.md)
+- [0011 — Store bounded source text for safe search snippets](0011-safe-content-snippets.md)

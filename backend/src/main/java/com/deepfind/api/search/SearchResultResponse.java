@@ -10,7 +10,8 @@ public record SearchResultResponse(
         String type,
         long sizeBytes,
         Instant modifiedAt,
-        String matchType) {
+        String matchType,
+        SearchSnippetResponse snippet) {
 
     static SearchResultResponse from(MetadataSearchResult result) {
         var metadata = result.metadata();
@@ -21,6 +22,7 @@ public record SearchResultResponse(
                 metadata.kind().name(),
                 metadata.sizeBytes(),
                 metadata.modifiedAt(),
-                result.matchType().name());
+                result.matchType().name(),
+                SearchSnippetResponse.from(result.snippet()));
     }
 }

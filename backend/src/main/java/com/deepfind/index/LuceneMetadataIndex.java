@@ -3,9 +3,11 @@ package com.deepfind.index;
 import com.deepfind.extraction.ExtractionResult;
 import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.PathNormalizer;
+import com.deepfind.search.ContentSnippetGenerator;
 import com.deepfind.search.MetadataMatchType;
 import com.deepfind.search.MetadataSearchPage;
 import com.deepfind.search.MetadataSearchResult;
+import com.deepfind.search.SearchSnippet;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -219,7 +221,12 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         for (ScoreDoc hit : hits) {
             Document document = searcher.storedFields().document(hit.doc);
             FileMetadata metadata = mapper.fromDocument(document);
-            results.add(new MetadataSearchResult(metadata, matchType(metadata, queryText)));
+            MetadataMatchType matchType = matchType(metadata, queryText);
+            SearchSnippet snippet = matchType == MetadataMatchType.CONTENT
+                    ? ContentSnippetGenerator.generate(document.get(LuceneIndexSchema.SNIPPET_SOURCE), queryText)
+                            .orElse(null)
+                    : null;
+            results.add(new MetadataSearchResult(metadata, matchType, snippet));
         }
         return List.copyOf(results);
     }

@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 2 — Content Extraction (in progress)
+Phase 2 — Content Extraction (complete)
 
 ## Last completed step
 
-STEP 8 — Connect bounded document extraction to Lucene content search.
+STEP 9 — Add safe highlighted content snippets and complete Phase 2.
 
 ## Completed
 
@@ -40,10 +40,14 @@ STEP 8 — Connect bounded document extraction to Lucene content search.
 - Filename-first search weighting across filename, path, and content fields, with a distinct `CONTENT` match category exposed through the API and UI.
 - End-to-end content-only search through the HTTP API and frontend “Document content” result explanation.
 - Integration coverage for TXT, PDF, DOCX, malformed PDF metadata survival, changed-content replacement, filename-over-content ranking, and restart persistence.
+- Lucene schema version 3 with an extraction-bounded stored snippet source for every successfully extracted document.
+- Whitespace-normalized content excerpts with a 240-character body limit, boundary ellipses, Unicode-safe slicing, and validated highlight offsets.
+- Plain-text snippet DTOs through the search API and React-node highlighting without document-derived HTML injection.
+- Snippet tests for context selection, multiple terms, whitespace, Unicode, response bounds, API mapping, and hostile markup-like document text.
 
 ## Current behavior
 
-The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content terms are persisted locally in Lucene but full extracted text is not stored as a retrievable field, so snippets are not available yet. The index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. Schema version 1 indexes must be removed and rebuilt. Indexed roots are not yet persisted as configuration.
+The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists an extraction-bounded source copy for snippet generation, so the local data directory contains sensitive text and is not encrypted. The index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. Earlier schema indexes must be removed and rebuilt. Indexed roots are not yet persisted as configuration.
 
 ## Commands verified
 
@@ -63,14 +67,16 @@ The user can index a local folder and search filenames, paths, and text inside s
 - `backend\mvnw.cmd dependency:tree --batch-mode --no-transfer-progress '-Dincludes=org.apache.tika:*'` after STEP 7 — passed; only the selected Tika parser modules and their required Tika support modules are present.
 - `backend\mvnw.cmd clean verify --batch-mode --no-transfer-progress` after STEP 8 — passed; 41 tests, package, and Spotless check succeeded. One host-dependent symlink test was skipped.
 - `npm run check` in `frontend` after STEP 8 — passed; ESLint, 5 Vitest interaction tests, TypeScript, and Vite production build succeeded.
+- `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 9 — passed; 44 tests, package, and Spotless check succeeded. One host-dependent symlink test was skipped.
+- `npm run check` in `frontend` after STEP 9 — passed; ESLint, 5 Vitest interaction tests (including safe snippet rendering), TypeScript, and Vite production build succeeded.
 
 ## Known failures
 
-No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits. Schema version 1 indexes are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR.
+No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits. Schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets.
 
 ## Next recommended step
 
-Add bounded content snippets around matching terms, expose them through the search API, and render safe highlighted context in result cards. Complete Phase 2 with an end-to-end content-search acceptance corpus.
+Begin Phase 3 by persisting indexed roots and settings locally, then record indexing jobs/scan history and define restart behavior for incomplete work. Preserve the already durable Lucene index and add user-facing rebuild management for schema changes.
 
 ## Important architectural notes
 
@@ -79,7 +85,7 @@ Add bounded content snippets around matching terms, expose them through the sear
 - Runtime services bind to loopback only.
 - Discovery uses observer callbacks so a later bounded indexing queue can apply backpressure.
 - Directory symlinks are indexed but not followed; see ADR 0005.
-- Lucene schema version 2 content fields, ranking, and bounded pipeline are documented in ADR 0010; ADR 0006 records the original metadata schema.
+- Lucene schema version 3 adds the bounded snippet source and offset-based UI contract in ADR 0011; ADRs 0006 and 0010 record the earlier metadata/content decisions.
 - The asynchronous loopback API and process-local job policy are documented in ADR 0007.
 - Validated, shell-free platform action behavior is documented in ADR 0008.
 - Tika extraction policy and cooperative-timeout tradeoffs are documented in ADR 0009.

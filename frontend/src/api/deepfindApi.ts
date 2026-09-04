@@ -33,6 +33,17 @@ export interface SearchResult {
   sizeBytes: number
   modifiedAt: string
   matchType: 'EXACT_FILENAME' | 'FILENAME_PREFIX' | 'FILENAME' | 'PATH' | 'CONTENT'
+  snippet: SearchSnippet | null
+}
+
+export interface SearchSnippet {
+  text: string
+  highlights: SearchHighlight[]
+}
+
+export interface SearchHighlight {
+  start: number
+  end: number
 }
 
 export interface SearchResponse {

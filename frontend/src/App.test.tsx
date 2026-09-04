@@ -101,6 +101,10 @@ describe('App', () => {
             sizeBytes: 2048,
             modifiedAt: '2026-08-31T10:30:00Z',
             matchType: 'CONTENT',
+            snippet: {
+              text: 'Request a refund. <img src=x onerror=alert(1)>',
+              highlights: [{ start: 10, end: 16 }],
+            },
           }],
         })
       }
@@ -113,6 +117,9 @@ describe('App', () => {
 
     expect(await screen.findByRole('heading', { name: 'final_submission.docx' })).toBeInTheDocument()
     expect(within(screen.getByRole('list', { name: /search results/i })).getByText('Document content')).toBeInTheDocument()
+    expect(screen.getByText('refund').tagName).toBe('MARK')
+    expect(screen.getByText(/<img src=x onerror=alert\(1\)>/)).toBeInTheDocument()
+    expect(document.querySelector('.result-snippet img')).toBeNull()
     expect(screen.getByText(/2\.0 KB/)).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/search?query=salary+expectation&limit=50',

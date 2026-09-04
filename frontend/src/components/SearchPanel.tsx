@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   DeepFindApiError,
   openFile,
   revealFile,
   type SearchResponse,
   type SearchResult,
+  type SearchSnippet,
 } from '../api/deepfindApi'
 
 interface SearchPanelProps {
@@ -115,6 +116,7 @@ function ResultCard({ result }: { result: SearchResult }) {
           <span className="match-badge">{matchLabel(result.matchType)}</span>
         </div>
         <p className="result-path" title={result.path}>{result.path}</p>
+        {result.snippet ? <p className="result-snippet">{renderSnippet(result.snippet)}</p> : null}
         <p className="result-meta">{typeLabel(result)} · Modified {formatDate(result.modifiedAt)}</p>
         <div className="result-actions" aria-label={`Actions for ${result.filename}`}>
           <button type="button" onClick={() => void performSystemAction('open')} disabled={pendingAction !== null}>
@@ -159,6 +161,21 @@ function matchLabel(matchType: SearchResult['matchType']) {
     PATH: 'Folder path',
     CONTENT: 'Document content',
   }[matchType]
+}
+
+function renderSnippet(snippet: SearchSnippet) {
+  const parts: ReactNode[] = []
+  let cursor = 0
+  snippet.highlights.forEach((highlight, index) => {
+    if (highlight.start < cursor || highlight.end <= highlight.start || highlight.end > snippet.text.length) return
+    if (highlight.start > cursor) {
+      parts.push(<span key={`text-${index}`}>{snippet.text.slice(cursor, highlight.start)}</span>)
+    }
+    parts.push(<mark key={`highlight-${index}`}>{snippet.text.slice(highlight.start, highlight.end)}</mark>)
+    cursor = highlight.end
+  })
+  if (cursor < snippet.text.length) parts.push(<span key="text-final">{snippet.text.slice(cursor)}</span>)
+  return parts
 }
 
 function typeLabel(result: SearchResult) {

@@ -2,7 +2,7 @@
 
 > You remember what was in the file. DeepFind finds where you put it.
 
-DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phase 1: Basic File Metadata Search is complete, and Phase 2 is in progress.** Users can select a local folder by path, monitor indexing, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, then open, reveal, or copy result paths from the web interface.
+DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phase 2: Content Extraction is complete.** Users can select a local folder by path, monitor indexing, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface.
 
 ## Privacy baseline
 
@@ -64,7 +64,7 @@ Desktop packaging is intentionally deferred to Phase 8. The production goal is o
 
 The search index defaults to `${user.home}/.deepfind/index`. Set `DEEPFIND_DATA_DIRECTORY` to override the parent directory. Database, settings, and application-log locations will be documented when those stores are introduced.
 
-Extracted text is indexed into local Lucene postings but is not retained as a retrievable stored field. Extraction defaults are a 20 MiB file limit, 500,000 extracted characters, a 15-second deadline, two workers, and a queue capacity of 32. Override them with the `deepfind.extraction.*` Spring properties when developing or packaging.
+Extracted text is indexed into local Lucene postings. An extraction-bounded stored copy supports snippets; search responses return only a short excerpt of at most 240 content characters plus boundary ellipses. Extraction defaults are a 20 MiB file limit, 500,000 extracted characters, a 15-second deadline, two workers, and a queue capacity of 32. Override them with the `deepfind.extraction.*` Spring properties when developing or packaging.
 
 ## Documentation
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 1 provides an end-to-end metadata-search slice: local filesystem discovery, a persistent Lucene filename/path index, a loopback API, a React indexing/search interface, and guarded platform file actions. Phase 2 is in progress: supported content is extracted through a bounded parser boundary, indexed into Lucene, and searchable through the API and UI. Content snippets remain to complete the phase. Desktop packaging remains deferred.
+Phases 1 and 2 provide an end-to-end local search slice: filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, and guarded platform file actions. Persistent roots/job state and desktop packaging remain deferred.
 
 ## Components
 
@@ -27,7 +27,7 @@ Discovery uses Java NIO `walkFileTree` and emits immutable metadata, progress sn
 
 The indexing pipeline is discovery → metadata upsert → bounded extraction queue/workers → same-key content update → commit/progress completion. Lucene's near-real-time reader can expose metadata upserts before slower content extraction and the final durable commit. A full document replacement keeps one entry per normalized path because Lucene does not perform partial field updates.
 
-The current search pipeline is React's debounced query state → relative `/api/search` request → normalization → Lucene query → filename-first ranking → explanatory match category → API DTO → result card. Content snippets and filters remain future extensions.
+The search pipeline is React's debounced query state → relative `/api/search` request → normalization → Lucene query → filename-first ranking → explanatory match category → bounded plain-text snippet with highlight offsets → API DTO → safely rendered result card. Filters remain a future extension.
 
 During development, Vite proxies relative `/api` traffic to `127.0.0.1:8080`. This keeps browser calls same-origin without widening the backend's network or CORS boundary. The frontend polls indexing status only while a job is running and aborts obsolete search requests when the query changes.
 
@@ -59,7 +59,7 @@ Spring owns one Lucene index lifecycle and closes it on shutdown. The index defa
 
 ## Index model
 
-Lucene schema version 2 indexes filenames, paths, and extracted content with a delimiter-aware lowercase analyzer. A normalized absolute-path key is exact and unique for upsert/delete. Display metadata plus extraction status/reason are stored; extracted content is indexed but not stored as a retrievable field. Size and timestamps additionally use points for range filters and numeric doc values for sorting. Exact filename, filename prefix, and general filename clauses outrank path and content clauses. `SearcherManager` provides near-real-time visibility, while explicit commits provide restart durability. Schema version lives in commit metadata and incompatible versions fail explicitly; version 1 indexes require a rebuild. See ADRs 0006 and 0010.
+Lucene schema version 3 indexes filenames, paths, and extracted content with a delimiter-aware lowercase analyzer. A normalized absolute-path key is exact and unique for upsert/delete. Display metadata, extraction status/reason, and an extraction-bounded snippet source are stored locally. Size and timestamps additionally use points for range filters and numeric doc values for sorting. Exact filename, filename prefix, and general filename clauses outrank path and content clauses. Content-only results receive whitespace-normalized excerpts with at most 240 body characters and ordered UTF-16 highlight ranges. `SearcherManager` provides near-real-time visibility, while explicit commits provide restart durability. Schema version lives in commit metadata and incompatible versions fail explicitly; earlier indexes require a rebuild. See ADRs 0006, 0010, and 0011.
 
 ## Platform integration
 

@@ -39,6 +39,7 @@ final class LuceneMetadataDocumentMapper {
             }
             if (!extraction.content().isEmpty()) {
                 document.add(new TextField(LuceneIndexSchema.CONTENT, extraction.content(), TextField.Store.NO));
+                document.add(new StoredField(LuceneIndexSchema.SNIPPET_SOURCE, extraction.content()));
             }
         }
         document.add(new StringField(LuceneIndexSchema.EXTENSION, metadata.extension(), StringField.Store.YES));

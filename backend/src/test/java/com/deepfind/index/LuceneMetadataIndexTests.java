@@ -114,6 +114,12 @@ class LuceneMetadataIndexTests {
                     .extracting(result -> result.metadata().filename())
                     .containsExactly("refund-policy.txt", "contract.pdf");
             assertThat(index.search("refund", 10).get(1).matchType()).isEqualTo(MetadataMatchType.CONTENT);
+            assertThat(index.search("refund", 10).get(1).snippet()).satisfies(snippet -> {
+                assertThat(snippet.text()).contains("refund");
+                assertThat(snippet.highlights()).singleElement().satisfies(highlight -> assertThat(
+                                snippet.text().substring(highlight.start(), highlight.end()))
+                        .isEqualTo("refund"));
+            });
         }
 
         try (LuceneMetadataIndex reopened = new LuceneMetadataIndex(indexPath)) {
@@ -160,7 +166,7 @@ class LuceneMetadataIndexTests {
 
         assertThatThrownBy(() -> new LuceneMetadataIndex(indexPath))
                 .isInstanceOf(IndexSchemaMismatchException.class)
-                .hasMessageContaining("expected 2")
+                .hasMessageContaining("expected 3")
                 .hasMessageContaining("999");
     }
 
