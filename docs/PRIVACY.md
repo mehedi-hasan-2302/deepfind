@@ -2,7 +2,7 @@
 
 ## Current behavior
 
-Phase 0 contains no indexing or persistence. The application does not inspect files, retain queries, send telemetry, load remote fonts, or call cloud APIs.
+DeepFind indexes selected filesystem metadata into a local Lucene directory. The default data directory is `${user.home}/.deepfind`, and `DEEPFIND_DATA_DIRECTORY` can override it. Search queries are processed in memory and are not persisted or logged by application code. The application does not send telemetry, load remote fonts, call cloud APIs, or upload indexed metadata.
 
 ## Product policy
 
@@ -19,4 +19,4 @@ The runtime backend binds to loopback only. Development tools may contact packag
 
 ## Future storage disclosure
 
-Exact database, Lucene index, settings, log, and temporary-file paths will be documented before those stores are introduced. DeepFind will not claim its index is encrypted until encryption is actually implemented and verified.
+The Lucene metadata index is stored under `<data-directory>/index`. Database, settings, application-log, and extraction temporary-file paths will be documented before those stores are introduced. DeepFind will not claim its index is encrypted until encryption is actually implemented and verified.

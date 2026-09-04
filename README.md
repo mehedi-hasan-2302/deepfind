@@ -62,7 +62,7 @@ Desktop packaging is intentionally deferred to Phase 8. The production goal is o
 
 ## Local data
 
-Phase 0 does not persist user data. Before persistence is introduced, the database, Lucene index, settings, and log locations will be documented and exposed in diagnostics.
+The metadata search index defaults to `${user.home}/.deepfind/index`. Set `DEEPFIND_DATA_DIRECTORY` to override the parent directory. Database, settings, and application-log locations will be documented when those stores are introduced.
 
 ## Documentation
 

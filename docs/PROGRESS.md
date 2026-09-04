@@ -6,7 +6,7 @@ Phase 1 — Basic File Metadata Search (in progress)
 
 ## Last completed step
 
-STEP 3 — Add persistent Lucene metadata indexing and search.
+STEP 4 — Expose asynchronous indexing and search APIs.
 
 ## Completed
 
@@ -20,10 +20,13 @@ STEP 3 — Add persistent Lucene metadata indexing and search.
 - Apache Lucene 10.5.1 metadata index with schema-version validation, normalized-path upsert/delete, explicit commits, near-real-time reader refresh, and clean lifecycle handling.
 - Delimiter-aware filename/path analysis, bounded plain-text search, filename-first ranking, and categorical match explanations.
 - Discovery-to-index bridge plus integration tests for duplicates, updates, deletion, exclusions, schema mismatch, punctuation input, and reopen persistence.
+- Application-managed Lucene storage with a configurable local data directory and clean Spring shutdown.
+- Single-worker asynchronous indexing jobs with current progress, completion/failure state, and concurrent-start rejection.
+- Validated indexing/status/search endpoints with stable safe error DTOs and full-context HTTP integration coverage.
 
 ## Current behavior
 
-The backend can scan a selected directory and stream its metadata into a persistent Lucene index. Repeated scans upsert by normalized absolute path, and committed indexes remain searchable after reopen. Plain queries search filenames and paths with exact/prefix filename boosts and an explainable match type. Runtime index configuration, root APIs, search APIs, and result UI do not exist yet.
+The running backend can accept a local folder through `POST /api/index/start`, process it asynchronously, report progress through `GET /api/index/status`, and return filename/path results through `GET /api/search`. The Lucene index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. The frontend does not yet call these APIs, and indexed roots are not persisted as configuration.
 
 ## Commands verified
 
@@ -33,6 +36,7 @@ The backend can scan a selected directory and stream its metadata into a persist
 - Frontend runtime smoke test — `GET http://127.0.0.1:5173/` returned HTTP 200 with the DeepFind title.
 - `backend\mvnw.cmd verify --batch-mode --no-transfer-progress` after STEP 2 — passed; 10 tests, package, and Spotless check succeeded. One symlink test was skipped because this Windows session does not permit symlink creation.
 - `backend\mvnw.cmd verify --batch-mode --no-transfer-progress` after STEP 3 — passed; 18 tests, package, and Spotless check succeeded. One host-dependent symlink test was skipped.
+- `backend\mvnw.cmd verify --batch-mode --no-transfer-progress` after STEP 4 — passed; 21 tests, full HTTP flow, concurrency invariant, package, and Spotless check succeeded. One host-dependent symlink test was skipped.
 
 ## Known failures
 
@@ -40,7 +44,7 @@ No product failures recorded. Maven is not installed globally, so all backend co
 
 ## Next recommended step
 
-Add the local application/API slice: configure the on-disk index location, expose validated endpoints to start a metadata scan and search results, provide consistent error DTOs, and prove the HTTP flow against a temporary root/index. The frontend integration should follow as its own module.
+Connect the frontend to the local API: add a folder-path onboarding form, indexing status polling, debounced metadata search, accessible result cards, empty/error states, and component tests. Platform open/reveal actions remain the following module.
 
 ## Important architectural notes
 
@@ -50,4 +54,5 @@ Add the local application/API slice: configure the on-disk index location, expos
 - Discovery uses observer callbacks so a later bounded indexing queue can apply backpressure.
 - Directory symlinks are indexed but not followed; see ADR 0005.
 - Lucene schema version 1 and field behavior are documented in ADR 0006.
+- The asynchronous loopback API and process-local job policy are documented in ADR 0007.
 - SQLite, Tika, and the desktop shell remain deferred until their owning steps/phases.

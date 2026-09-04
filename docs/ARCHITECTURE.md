@@ -43,6 +43,10 @@ Discovery, extraction, index writing, and search will use separate bounded execu
 
 The backend binds to `127.0.0.1`, never `0.0.0.0`, by default. The initial health API exposes no file data. Future filesystem actions must validate input and avoid arbitrary content-read endpoints.
 
+## Runtime configuration and API
+
+Spring owns one Lucene index lifecycle and closes it on shutdown. The index defaults to `${user.home}/.deepfind/index`; `DEEPFIND_DATA_DIRECTORY` overrides the parent data directory for packaging and tests. One daemon worker accepts at most one indexing job at a time, while search uses Lucene's independently refreshed readers. The local API currently exposes indexing start/status and metadata search. Requests are validated and failures use stable error codes without Java stack traces.
+
 ## Index model
 
 Lucene schema version 1 indexes filenames and paths with a delimiter-aware lowercase analyzer suited to filenames and platform paths. A normalized absolute-path key is exact and unique for upsert/delete. Display metadata is stored; size and timestamps additionally use points for range filters and numeric doc values for sorting. `SearcherManager` provides near-real-time visibility, while explicit commits provide restart durability. Schema version lives in commit metadata and incompatible versions fail explicitly. See ADR 0006 for the full field table.

@@ -3,6 +3,7 @@ package com.deepfind.index;
 import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.PathNormalizer;
 import com.deepfind.search.MetadataMatchType;
+import com.deepfind.search.MetadataSearchPage;
 import com.deepfind.search.MetadataSearchResult;
 import java.io.IOException;
 import java.nio.file.Path;
@@ -129,11 +130,15 @@ public final class LuceneMetadataIndex implements AutoCloseable {
     }
 
     public List<MetadataSearchResult> search(String queryText, int limit) {
+        return searchPage(queryText, limit).results();
+    }
+
+    public MetadataSearchPage searchPage(String queryText, int limit) {
         ensureOpen();
         String query =
                 Objects.requireNonNull(queryText, "queryText must not be null").trim();
         if (query.isEmpty()) {
-            return List.of();
+            return new MetadataSearchPage(0, List.of());
         }
         if (limit < 1 || limit > MAX_RESULT_LIMIT) {
             throw new IllegalArgumentException("limit must be between 1 and " + MAX_RESULT_LIMIT);
@@ -145,7 +150,9 @@ public final class LuceneMetadataIndex implements AutoCloseable {
             IndexSearcher searcher = searcherManager.acquire();
             try {
                 TopDocs hits = searcher.search(luceneQuery, limit);
-                return mapResults(searcher, hits.scoreDocs, query);
+                return new MetadataSearchPage(
+                        hits.totalHits == null ? hits.scoreDocs.length : hits.totalHits.value(),
+                        mapResults(searcher, hits.scoreDocs, query));
             } finally {
                 searcherManager.release(searcher);
             }

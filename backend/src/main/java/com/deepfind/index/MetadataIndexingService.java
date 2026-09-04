@@ -10,7 +10,9 @@ import com.deepfind.filesystem.FileSystemDiscoveryService;
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
+import org.springframework.stereotype.Service;
 
+@Service
 public final class MetadataIndexingService {
 
     private final FileSystemDiscoveryService discoveryService;
