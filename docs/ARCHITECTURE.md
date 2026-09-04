@@ -8,7 +8,7 @@ Phase 0 establishes the development boundary. Indexing, persistence, and desktop
 
 - `frontend`: React and TypeScript interface served by Vite during development.
 - `backend`: Java 21 Spring Boot modular monolith exposing a local HTTP API.
-- Future infrastructure adapters: Lucene for full-text search, SQLite for structured application state, Apache Tika for bounded extraction, and platform adapters for open/reveal actions.
+- Infrastructure adapters: Lucene for local full-text search; future SQLite for structured application state, Apache Tika for bounded extraction, and platform adapters for open/reveal actions.
 - Future desktop shell: responsible for starting the backend, waiting for health, hosting the UI, and shutting down cleanly.
 
 ## Dependency direction
@@ -45,7 +45,7 @@ The backend binds to `127.0.0.1`, never `0.0.0.0`, by default. The initial healt
 
 ## Index model
 
-The detailed Lucene field model and schema version will be committed when Lucene is introduced in Phase 1. The normalized absolute path is the likely MVP stable key, with platform-aware case handling.
+Lucene schema version 1 indexes filenames and paths with a delimiter-aware lowercase analyzer suited to filenames and platform paths. A normalized absolute-path key is exact and unique for upsert/delete. Display metadata is stored; size and timestamps additionally use points for range filters and numeric doc values for sorting. `SearcherManager` provides near-real-time visibility, while explicit commits provide restart durability. Schema version lives in commit metadata and incompatible versions fail explicitly. See ADR 0006 for the full field table.
 
 ## Platform integration
 

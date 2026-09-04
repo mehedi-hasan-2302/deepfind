@@ -13,6 +13,6 @@ frontend/coverage/
 *.db
 *.db-shm
 *.db-wal
-data/
-index/
-logs/
+/data/
+/index/
+/logs/
