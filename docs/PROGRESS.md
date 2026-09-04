@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 1 — Basic File Metadata Search (complete)
+Phase 2 — Content Extraction (in progress)
 
 ## Last completed step
 
-STEP 6 — Add safe file actions and complete Phase 1.
+STEP 7 — Add a bounded Apache Tika content-extraction foundation.
 
 ## Completed
 
@@ -30,10 +30,15 @@ STEP 6 — Add safe file actions and complete Phase 1.
 - Guarded platform abstraction for opening and revealing existing absolute paths on Windows, macOS, and Linux without shell interpolation.
 - Narrow file-action endpoints with stable invalid/unavailable errors and no generic process-execution surface.
 - Result-card controls for Open, Show in Folder, Copy Path, and Copy Folder with accessible per-result feedback.
+- Apache Tika 3.3.2 behind `ContentExtractor` and `DocumentParser` contracts, with only the text, code, XML, Microsoft, and PDF parser modules selected.
+- Conservative extension and detected-media-type checks for text, Markdown, common source/configuration files, PDF, and DOCX; HTML and other stretch formats remain deferred.
+- Configurable byte, extracted-character, deadline, worker-count, and queue-capacity limits, with embedded-document extraction disabled.
+- Structured extraction outcomes for success, unsupported types, oversized files, permission failures, malformed documents, and timeouts without exposing parser details.
+- Real TXT, source-code, PDF, DOCX, corrupt-PDF, size-limit, media-mismatch, permission, parser-failure, and timeout test coverage.
 
 ## Current behavior
 
-The frontend and backend now provide the complete Phase 1 metadata-search loop. A user can enter a local folder path, start indexing, follow live progress, search filenames and directories with explanatory result context, and open, reveal, or copy paths from each result. The Lucene index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. Indexed roots are not yet persisted as configuration.
+The frontend and backend provide the complete Phase 1 metadata-search loop. The backend can also detect and extract bounded text from supported local documents through an isolated service boundary. Extraction is not yet connected to the discovery/indexing job or Lucene schema, so searches still match filename and path only. Extracted content is currently transient and stays in memory. The Lucene index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. Indexed roots are not yet persisted as configuration.
 
 ## Commands verified
 
@@ -49,14 +54,16 @@ The frontend and backend now provide the complete Phase 1 metadata-search loop. 
 - STEP 5 live integration smoke test — frontend HTTP 200; proxied `/api/health` returned `UP`; proxied `/api/index/status` returned `IDLE`.
 - `backend\mvnw.cmd spotless:apply verify --batch-mode --no-transfer-progress` after STEP 6 — passed; 27 tests covered platform commands and HTTP contracts, with one host-dependent symlink test skipped.
 - `npm run check` in `frontend` after STEP 6 — passed; ESLint, 5 Vitest interaction tests, TypeScript, and Vite production build succeeded.
+- `backend\mvnw.cmd clean verify` after STEP 7 — passed; 38 tests, package, and Spotless check succeeded. One host-dependent symlink test was skipped.
+- `backend\mvnw.cmd dependency:tree --batch-mode --no-transfer-progress '-Dincludes=org.apache.tika:*'` after STEP 7 — passed; only the selected Tika parser modules and their required Tika support modules are present.
 
 ## Known failures
 
-No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation.
+No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits.
 
 ## Next recommended step
 
-Begin Phase 2 with a bounded content-extraction policy and parser abstraction, then introduce Apache Tika for explicitly supported document types with size, timeout, and failure limits.
+Add a versioned Lucene content field and connect the discovery/indexing pipeline to bounded extraction. Then add content-aware ranking and snippets so a term found only inside a supported document returns that file.
 
 ## Important architectural notes
 
@@ -68,4 +75,5 @@ Begin Phase 2 with a bounded content-extraction policy and parser abstraction, t
 - Lucene schema version 1 and field behavior are documented in ADR 0006.
 - The asynchronous loopback API and process-local job policy are documented in ADR 0007.
 - Validated, shell-free platform action behavior is documented in ADR 0008.
-- SQLite, Tika, and the desktop shell remain deferred until their owning steps/phases.
+- Tika extraction policy and cooperative-timeout tradeoffs are documented in ADR 0009.
+- SQLite and the desktop shell remain deferred until their owning steps/phases.

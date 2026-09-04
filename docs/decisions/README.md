@@ -10,3 +10,4 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0006 — Use Lucene for persistent metadata search](0006-use-lucene-metadata-index.md)
 - [0007 — Asynchronous loopback indexing API](0007-asynchronous-local-api.md)
 - [0008 — Validate and isolate platform file actions](0008-platform-file-actions.md)
+- [0009 — Bound and isolate document extraction](0009-bounded-document-extraction.md)

@@ -2,7 +2,7 @@
 
 ## Current behavior
 
-DeepFind indexes selected filesystem metadata into a local Lucene directory. The default data directory is `${user.home}/.deepfind`, and `DEEPFIND_DATA_DIRECTORY` can override it. Search queries are processed in memory and are not persisted or logged by application code. The application does not send telemetry, load remote fonts, call cloud APIs, or upload indexed metadata.
+DeepFind indexes selected filesystem metadata into a local Lucene directory. The default data directory is `${user.home}/.deepfind`, and `DEEPFIND_DATA_DIRECTORY` can override it. Supported document text can now be extracted locally under byte, character, concurrency, and time limits, but is currently held only in memory and is not yet added to the index. Search queries and extracted content are not logged by application code. The application does not send telemetry, load remote fonts, call cloud APIs, or upload indexed metadata or content.
 
 ## Product policy
 
@@ -15,7 +15,7 @@ DeepFind indexes selected filesystem metadata into a local Lucene directory. The
 
 ## Network behavior
 
-The runtime backend binds to loopback only. The Vite development server also binds to loopback and proxies relative `/api` requests to the backend; no broad CORS policy is enabled. Open/reveal requests pass an existing local path to the operating system as a discrete process argument and never interpolate it into a shell command. Clipboard operations remain inside the local browser session. Development tools may contact package repositories while installing dependencies; that is build-time behavior, not application telemetry.
+The runtime backend binds to loopback only. The Vite development server also binds to loopback and proxies relative `/api` requests to the backend; no broad CORS policy is enabled. Open/reveal requests pass an existing local path to the operating system as a discrete process argument and never interpolate it into a shell command. Clipboard operations remain inside the local browser session. Development tools may contact package repositories while installing dependencies; that is build-time behavior, not application telemetry. Apache Tika runs in-process and performs no application-configured outbound requests; embedded-document extraction is disabled.
 
 ## Future storage disclosure
 

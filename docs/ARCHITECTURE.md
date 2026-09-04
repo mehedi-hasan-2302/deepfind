@@ -2,13 +2,13 @@
 
 ## Status
 
-Phase 1 provides an end-to-end metadata-search slice: local filesystem discovery, a persistent Lucene filename/path index, a loopback API, a React indexing/search interface, and guarded platform file actions. Content extraction and desktop packaging remain deferred.
+Phase 1 provides an end-to-end metadata-search slice: local filesystem discovery, a persistent Lucene filename/path index, a loopback API, a React indexing/search interface, and guarded platform file actions. Phase 2 is in progress: bounded content extraction exists behind a parser contract, but extracted text is not yet written to Lucene. Desktop packaging remains deferred.
 
 ## Components
 
 - `frontend`: React and TypeScript interface served by Vite during development.
 - `backend`: Java 21 Spring Boot modular monolith exposing a local HTTP API.
-- Infrastructure adapters: Lucene for local full-text search; future SQLite for structured application state, Apache Tika for bounded extraction, and platform adapters for open/reveal actions.
+- Infrastructure adapters: Lucene for local full-text search, Apache Tika for bounded extraction, future SQLite for structured application state, and platform adapters for open/reveal actions.
 - Future desktop shell: responsible for starting the backend, waiting for health, hosting the UI, and shutting down cleanly.
 
 ## Dependency direction
@@ -33,7 +33,15 @@ During development, Vite proxies relative `/api` traffic to `127.0.0.1:8080`. Th
 
 ## Concurrency
 
-Discovery, extraction, index writing, and search will use separate bounded execution resources. Backpressure is mandatory; millions of discovered paths must not accumulate in memory.
+Discovery, extraction, index writing, and search use or will use separate bounded execution resources. Extraction currently has a fixed worker count and bounded queue; rejected work returns a structured failure instead of growing memory without limit. Backpressure remains mandatory throughout the indexing pipeline.
+
+## Content extraction
+
+The `ContentExtractor` contract isolates callers from Apache Tika. A conservative extension allowlist is checked first, then Tika detection must confirm a compatible media type before parsing. Initial formats are plain text, Markdown, common source/configuration files, PDF, and DOCX. Embedded documents are disabled.
+
+Files above the configured byte limit are rejected before parsing. A bounded executor limits concurrency and queued work, Tika's write limit caps extracted characters, and each request has a deadline. Outcomes are explicit: `SUCCESS`, `UNSUPPORTED`, `SKIPPED_TOO_LARGE`, `PERMISSION_DENIED`, `PARSE_ERROR`, or `TIMEOUT`. Failures do not expose parser exception details or file contents.
+
+The current timeout uses interruption of an in-process parser worker. It bounds how long the caller waits but is cooperative rather than hard process isolation. A parser that ignores interruption could occupy a worker until it returns; risky formats may move to Tika's process-isolated facilities in a later hardening step. See ADR 0009.
 
 ## Storage roles
 
