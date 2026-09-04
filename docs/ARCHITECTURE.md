@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 1 provides an end-to-end metadata-search slice: local filesystem discovery, a persistent Lucene filename/path index, a loopback API, a React indexing/search interface, and guarded platform file actions. Phase 2 is in progress: bounded content extraction exists behind a parser contract, but extracted text is not yet written to Lucene. Desktop packaging remains deferred.
+Phase 1 provides an end-to-end metadata-search slice: local filesystem discovery, a persistent Lucene filename/path index, a loopback API, a React indexing/search interface, and guarded platform file actions. Phase 2 is in progress: supported content is extracted through a bounded parser boundary, indexed into Lucene, and searchable through the API and UI. Content snippets remain to complete the phase. Desktop packaging remains deferred.
 
 ## Components
 
@@ -25,7 +25,7 @@ Discovery uses Java NIO `walkFileTree` and emits immutable metadata, progress sn
 
 ## Data flow
 
-The intended indexing pipeline is discovery → bounded metadata queue → metadata index → bounded extraction workers → content update → progress event. Metadata should become searchable before slower content extraction completes.
+The indexing pipeline is discovery → metadata upsert → bounded extraction queue/workers → same-key content update → commit/progress completion. Lucene's near-real-time reader can expose metadata upserts before slower content extraction and the final durable commit. A full document replacement keeps one entry per normalized path because Lucene does not perform partial field updates.
 
 The current search pipeline is React's debounced query state → relative `/api/search` request → normalization → Lucene query → filename-first ranking → explanatory match category → API DTO → result card. Content snippets and filters remain future extensions.
 
@@ -33,7 +33,7 @@ During development, Vite proxies relative `/api` traffic to `127.0.0.1:8080`. Th
 
 ## Concurrency
 
-Discovery, extraction, index writing, and search use or will use separate bounded execution resources. Extraction currently has a fixed worker count and bounded queue; rejected work returns a structured failure instead of growing memory without limit. Backpressure remains mandatory throughout the indexing pipeline.
+Discovery, extraction, index writing, and search use separate execution boundaries. Content-indexing workers use a fixed pool and bounded queue; when that queue fills, the discovery caller performs extraction work to apply backpressure instead of accumulating paths. The extractor has its own fixed parser pool and bounded queue so parser capacity remains independently enforced.
 
 ## Content extraction
 
@@ -55,11 +55,11 @@ The backend binds to `127.0.0.1`, never `0.0.0.0`, by default. The initial healt
 
 ## Runtime configuration and API
 
-Spring owns one Lucene index lifecycle and closes it on shutdown. The index defaults to `${user.home}/.deepfind/index`; `DEEPFIND_DATA_DIRECTORY` overrides the parent data directory for packaging and tests. One daemon worker accepts at most one indexing job at a time, while search uses Lucene's independently refreshed readers. The local API currently exposes indexing start/status and metadata search. Requests are validated and failures use stable error codes without Java stack traces.
+Spring owns one Lucene index lifecycle and closes it on shutdown. The index defaults to `${user.home}/.deepfind/index`; `DEEPFIND_DATA_DIRECTORY` overrides the parent data directory for packaging and tests. One daemon worker accepts at most one indexing job at a time, while search uses Lucene's independently refreshed readers. The local API exposes indexing start/status and filename, path, and content search. Requests are validated and failures use stable error codes without Java stack traces.
 
 ## Index model
 
-Lucene schema version 1 indexes filenames and paths with a delimiter-aware lowercase analyzer suited to filenames and platform paths. A normalized absolute-path key is exact and unique for upsert/delete. Display metadata is stored; size and timestamps additionally use points for range filters and numeric doc values for sorting. `SearcherManager` provides near-real-time visibility, while explicit commits provide restart durability. Schema version lives in commit metadata and incompatible versions fail explicitly. See ADR 0006 for the full field table.
+Lucene schema version 2 indexes filenames, paths, and extracted content with a delimiter-aware lowercase analyzer. A normalized absolute-path key is exact and unique for upsert/delete. Display metadata plus extraction status/reason are stored; extracted content is indexed but not stored as a retrievable field. Size and timestamps additionally use points for range filters and numeric doc values for sorting. Exact filename, filename prefix, and general filename clauses outrank path and content clauses. `SearcherManager` provides near-real-time visibility, while explicit commits provide restart durability. Schema version lives in commit metadata and incompatible versions fail explicitly; version 1 indexes require a rebuild. See ADRs 0006 and 0010.
 
 ## Platform integration
 

@@ -43,6 +43,7 @@ class DeepFindApiIntegrationTests {
     void indexesAndSearchesThroughTheHttpApi() throws Exception {
         Path project = Files.createDirectories(root.resolve("Archive/Client ABC/Thesis"));
         Path expectedFile = Files.writeString(project.resolve("final_submission.docx"), "metadata only");
+        Path contentFile = Files.writeString(project.resolve("private-notes.txt"), "the internal codename is starling");
         String requestJson = "{\"root\":\"" + jsonEscape(root.toString()) + "\"}";
 
         mockMvc.perform(post("/api/index/start")
@@ -52,12 +53,12 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.jobId").isNotEmpty())
                 .andExpect(jsonPath("$.state").value("RUNNING"));
 
-        awaitCompleted(Duration.ofSeconds(5));
+        awaitCompleted(Duration.ofSeconds(15));
 
         mockMvc.perform(get("/api/index/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("COMPLETED"))
-                .andExpect(jsonPath("$.entriesIndexed").value(5))
+                .andExpect(jsonPath("$.entriesIndexed").value(6))
                 .andExpect(jsonPath("$.failures").value(0));
 
         mockMvc.perform(get("/api/search").param("query", "thesis final").param("limit", "10"))
@@ -68,6 +69,13 @@ class DeepFindApiIntegrationTests {
                         .value(expectedFile.toAbsolutePath().normalize().toString()))
                 .andExpect(jsonPath("$.results[0].filename").value("final_submission.docx"))
                 .andExpect(jsonPath("$.results[0].matchType").value("PATH"));
+
+        mockMvc.perform(get("/api/search").param("query", "starling").param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalHits").value(1))
+                .andExpect(jsonPath("$.results[0].path")
+                        .value(contentFile.toAbsolutePath().normalize().toString()))
+                .andExpect(jsonPath("$.results[0].matchType").value("CONTENT"));
     }
 
     @Test

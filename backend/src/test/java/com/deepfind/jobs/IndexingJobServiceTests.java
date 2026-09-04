@@ -3,6 +3,9 @@ package com.deepfind.jobs;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.deepfind.config.DeepFindExtractionProperties;
+import com.deepfind.extraction.ExtractionResult;
+import com.deepfind.extraction.ExtractionStatus;
 import com.deepfind.filesystem.DiscoveryObserver;
 import com.deepfind.filesystem.DiscoverySummary;
 import com.deepfind.filesystem.ExclusionPolicy;
@@ -31,7 +34,11 @@ class IndexingJobServiceTests {
         BlockingDiscoveryService discovery = new BlockingDiscoveryService();
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try (LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("index"))) {
-            MetadataIndexingService indexing = new MetadataIndexingService(discovery, index);
+            MetadataIndexingService indexing = new MetadataIndexingService(
+                    discovery,
+                    index,
+                    path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
+                    new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(1), 1, 2));
             IndexingJobService jobs = new IndexingJobService(
                     indexing, Clock.fixed(Instant.parse("2026-09-04T06:00:00Z"), ZoneOffset.UTC), executor);
             try {

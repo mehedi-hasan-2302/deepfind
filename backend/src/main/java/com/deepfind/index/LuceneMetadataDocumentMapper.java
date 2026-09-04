@@ -1,5 +1,6 @@
 package com.deepfind.index;
 
+import com.deepfind.extraction.ExtractionResult;
 import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.FileSystemEntryKind;
 import java.nio.file.Path;
@@ -15,6 +16,10 @@ import org.apache.lucene.document.TextField;
 final class LuceneMetadataDocumentMapper {
 
     Document toDocument(FileMetadata metadata, Instant indexedAt) {
+        return toDocument(metadata, indexedAt, null);
+    }
+
+    Document toDocument(FileMetadata metadata, Instant indexedAt, ExtractionResult extraction) {
         Document document = new Document();
         document.add(new StringField(LuceneIndexSchema.PATH_KEY, metadata.normalizedPath(), StringField.Store.YES));
         document.add(new StoredField(
@@ -24,6 +29,18 @@ final class LuceneMetadataDocumentMapper {
                 LuceneIndexSchema.FILENAME_EXACT, metadata.filename().toLowerCase(Locale.ROOT), StringField.Store.NO));
         document.add(new TextField(
                 LuceneIndexSchema.PATH_TEXT, metadata.absolutePath().toString(), TextField.Store.NO));
+        if (extraction == null) {
+            document.add(new StringField(LuceneIndexSchema.EXTRACTION_STATUS, "NOT_ATTEMPTED", StringField.Store.YES));
+        } else {
+            document.add(new StringField(
+                    LuceneIndexSchema.EXTRACTION_STATUS, extraction.status().name(), StringField.Store.YES));
+            if (!extraction.reason().isEmpty()) {
+                document.add(new StoredField(LuceneIndexSchema.EXTRACTION_REASON, extraction.reason()));
+            }
+            if (!extraction.content().isEmpty()) {
+                document.add(new TextField(LuceneIndexSchema.CONTENT, extraction.content(), TextField.Store.NO));
+            }
+        }
         document.add(new StringField(LuceneIndexSchema.EXTENSION, metadata.extension(), StringField.Store.YES));
         document.add(new StringField(LuceneIndexSchema.KIND, metadata.kind().name(), StringField.Store.YES));
         addSortableLong(document, LuceneIndexSchema.SIZE_BYTES, metadata.sizeBytes());

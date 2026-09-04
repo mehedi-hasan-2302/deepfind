@@ -84,13 +84,13 @@ describe('App', () => {
     }))
   })
 
-  it('debounces metadata search and renders useful result context', async () => {
+  it('debounces content search and renders useful result context', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString()
       if (url === '/api/index/status') return jsonResponse(idleStatus)
       if (url.startsWith('/api/search?')) {
         return jsonResponse({
-          query: 'thesis final',
+          query: 'salary expectation',
           tookMs: 4,
           totalHits: 1,
           results: [{
@@ -100,7 +100,7 @@ describe('App', () => {
             type: 'FILE',
             sizeBytes: 2048,
             modifiedAt: '2026-08-31T10:30:00Z',
-            matchType: 'PATH',
+            matchType: 'CONTENT',
           }],
         })
       }
@@ -109,13 +109,13 @@ describe('App', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(<App />)
-    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'thesis final' } })
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'salary expectation' } })
 
     expect(await screen.findByRole('heading', { name: 'final_submission.docx' })).toBeInTheDocument()
-    expect(within(screen.getByRole('list', { name: /search results/i })).getByText('Folder path')).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: /search results/i })).getByText('Document content')).toBeInTheDocument()
     expect(screen.getByText(/2\.0 KB/)).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/search?query=thesis+final&limit=50',
+      '/api/search?query=salary+expectation&limit=50',
       expect.objectContaining({ signal: expect.anything() }),
     )
   })

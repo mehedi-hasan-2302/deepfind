@@ -6,7 +6,7 @@ Phase 2 — Content Extraction (in progress)
 
 ## Last completed step
 
-STEP 7 — Add a bounded Apache Tika content-extraction foundation.
+STEP 8 — Connect bounded document extraction to Lucene content search.
 
 ## Completed
 
@@ -35,10 +35,15 @@ STEP 7 — Add a bounded Apache Tika content-extraction foundation.
 - Configurable byte, extracted-character, deadline, worker-count, and queue-capacity limits, with embedded-document extraction disabled.
 - Structured extraction outcomes for success, unsupported types, oversized files, permission failures, malformed documents, and timeouts without exposing parser details.
 - Real TXT, source-code, PDF, DOCX, corrupt-PDF, size-limit, media-mismatch, permission, parser-failure, and timeout test coverage.
+- Lucene schema version 2 with indexed non-stored content plus stored extraction status and stable failure reason fields.
+- Metadata-first, same-path content updates through a fixed content-indexing pool and bounded queue with caller-runs backpressure.
+- Filename-first search weighting across filename, path, and content fields, with a distinct `CONTENT` match category exposed through the API and UI.
+- End-to-end content-only search through the HTTP API and frontend “Document content” result explanation.
+- Integration coverage for TXT, PDF, DOCX, malformed PDF metadata survival, changed-content replacement, filename-over-content ranking, and restart persistence.
 
 ## Current behavior
 
-The frontend and backend provide the complete Phase 1 metadata-search loop. The backend can also detect and extract bounded text from supported local documents through an isolated service boundary. Extraction is not yet connected to the discovery/indexing job or Lucene schema, so searches still match filename and path only. Extracted content is currently transient and stays in memory. The Lucene index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. Indexed roots are not yet persisted as configuration.
+The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content terms are persisted locally in Lucene but full extracted text is not stored as a retrievable field, so snippets are not available yet. The index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. Schema version 1 indexes must be removed and rebuilt. Indexed roots are not yet persisted as configuration.
 
 ## Commands verified
 
@@ -56,14 +61,16 @@ The frontend and backend provide the complete Phase 1 metadata-search loop. The 
 - `npm run check` in `frontend` after STEP 6 — passed; ESLint, 5 Vitest interaction tests, TypeScript, and Vite production build succeeded.
 - `backend\mvnw.cmd clean verify` after STEP 7 — passed; 38 tests, package, and Spotless check succeeded. One host-dependent symlink test was skipped.
 - `backend\mvnw.cmd dependency:tree --batch-mode --no-transfer-progress '-Dincludes=org.apache.tika:*'` after STEP 7 — passed; only the selected Tika parser modules and their required Tika support modules are present.
+- `backend\mvnw.cmd clean verify --batch-mode --no-transfer-progress` after STEP 8 — passed; 41 tests, package, and Spotless check succeeded. One host-dependent symlink test was skipped.
+- `npm run check` in `frontend` after STEP 8 — passed; ESLint, 5 Vitest interaction tests, TypeScript, and Vite production build succeeded.
 
 ## Known failures
 
-No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits.
+No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits. Schema version 1 indexes are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR.
 
 ## Next recommended step
 
-Add a versioned Lucene content field and connect the discovery/indexing pipeline to bounded extraction. Then add content-aware ranking and snippets so a term found only inside a supported document returns that file.
+Add bounded content snippets around matching terms, expose them through the search API, and render safe highlighted context in result cards. Complete Phase 2 with an end-to-end content-search acceptance corpus.
 
 ## Important architectural notes
 
@@ -72,7 +79,7 @@ Add a versioned Lucene content field and connect the discovery/indexing pipeline
 - Runtime services bind to loopback only.
 - Discovery uses observer callbacks so a later bounded indexing queue can apply backpressure.
 - Directory symlinks are indexed but not followed; see ADR 0005.
-- Lucene schema version 1 and field behavior are documented in ADR 0006.
+- Lucene schema version 2 content fields, ranking, and bounded pipeline are documented in ADR 0010; ADR 0006 records the original metadata schema.
 - The asynchronous loopback API and process-local job policy are documented in ADR 0007.
 - Validated, shell-free platform action behavior is documented in ADR 0008.
 - Tika extraction policy and cooperative-timeout tradeoffs are documented in ADR 0009.

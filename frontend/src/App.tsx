@@ -115,7 +115,7 @@ function App() {
       <section className="hero" id="top" aria-labelledby="welcome-heading">
         <p className="eyebrow">Private search for your computer</p>
         <h1 id="welcome-heading">Find the file you remember.</h1>
-        <p className="intro">Search filenames and folders instantly from a private index stored on this device.</p>
+        <p className="intro">Search filenames, folders, and supported document text from a private index on this device.</p>
       </section>
 
       <div className="workspace">

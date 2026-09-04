@@ -1,5 +1,6 @@
 package com.deepfind.index;
 
+import com.deepfind.extraction.ExtractionResult;
 import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.PathNormalizer;
 import com.deepfind.search.MetadataMatchType;
@@ -84,10 +85,19 @@ public final class LuceneMetadataIndex implements AutoCloseable {
     }
 
     public void upsert(FileMetadata metadata) {
+        upsert(metadata, null);
+    }
+
+    public void upsertContent(FileMetadata metadata, ExtractionResult extraction) {
+        Objects.requireNonNull(extraction, "extraction must not be null");
+        upsert(metadata, extraction);
+    }
+
+    private void upsert(FileMetadata metadata, ExtractionResult extraction) {
         ensureOpen();
         Objects.requireNonNull(metadata, "metadata must not be null");
         try {
-            Document document = mapper.toDocument(metadata, clock.instant());
+            Document document = mapper.toDocument(metadata, clock.instant(), extraction);
             writer.updateDocument(new Term(LuceneIndexSchema.PATH_KEY, metadata.normalizedPath()), document);
         } catch (IOException exception) {
             throw new IndexAccessException("DeepFind could not update the local search index.", exception);
@@ -176,9 +186,15 @@ public final class LuceneMetadataIndex implements AutoCloseable {
     private Query buildQuery(String queryText) {
         String normalizedQuery = queryText.toLowerCase(Locale.ROOT);
         MultiFieldQueryParser parser = new MultiFieldQueryParser(
-                new String[] {LuceneIndexSchema.FILENAME, LuceneIndexSchema.PATH_TEXT},
+                new String[] {LuceneIndexSchema.FILENAME, LuceneIndexSchema.PATH_TEXT, LuceneIndexSchema.CONTENT},
                 analyzer,
-                Map.of(LuceneIndexSchema.FILENAME, 4.0f, LuceneIndexSchema.PATH_TEXT, 1.0f));
+                Map.of(
+                        LuceneIndexSchema.FILENAME,
+                        4.0f,
+                        LuceneIndexSchema.PATH_TEXT,
+                        1.0f,
+                        LuceneIndexSchema.CONTENT,
+                        0.5f));
         parser.setDefaultOperator(QueryParser.Operator.AND);
 
         BooleanQuery.Builder query = new BooleanQuery.Builder();
@@ -218,7 +234,12 @@ public final class LuceneMetadataIndex implements AutoCloseable {
             return MetadataMatchType.FILENAME_PREFIX;
         }
         boolean allTermsInFilename = List.of(query.split("\\s+")).stream().allMatch(filename::contains);
-        return allTermsInFilename ? MetadataMatchType.FILENAME : MetadataMatchType.PATH;
+        if (allTermsInFilename) {
+            return MetadataMatchType.FILENAME;
+        }
+        String path = metadata.absolutePath().toString().toLowerCase(Locale.ROOT);
+        boolean allTermsInPath = List.of(query.split("\\s+")).stream().allMatch(path::contains);
+        return allTermsInPath ? MetadataMatchType.PATH : MetadataMatchType.CONTENT;
     }
 
     private static void validateSchema(Directory directory) throws IOException {

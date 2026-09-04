@@ -2,7 +2,7 @@
 
 > You remember what was in the file. DeepFind finds where you put it.
 
-DeepFind is a private, offline-first desktop search application for finding files by name, path, and—later in the MVP—the text inside supported documents. **Phase 1: Basic File Metadata Search is complete, and Phase 2 is in progress.** Users can select a local folder by path, monitor indexing, search the resulting filename/path index, open or reveal results, and copy paths from the web interface. The backend now has bounded local extraction for text, Markdown, common source files, PDF, and DOCX; connecting extracted text to Lucene is the next step.
+DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phase 1: Basic File Metadata Search is complete, and Phase 2 is in progress.** Users can select a local folder by path, monitor indexing, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, then open, reveal, or copy result paths from the web interface.
 
 ## Privacy baseline
 
@@ -62,9 +62,9 @@ Desktop packaging is intentionally deferred to Phase 8. The production goal is o
 
 ## Local data
 
-The metadata search index defaults to `${user.home}/.deepfind/index`. Set `DEEPFIND_DATA_DIRECTORY` to override the parent directory. Database, settings, and application-log locations will be documented when those stores are introduced.
+The search index defaults to `${user.home}/.deepfind/index`. Set `DEEPFIND_DATA_DIRECTORY` to override the parent directory. Database, settings, and application-log locations will be documented when those stores are introduced.
 
-Content extraction currently runs in memory and does not persist extracted text. Its defaults are a 20 MiB file limit, 500,000 extracted characters, a 15-second deadline, two workers, and a queue capacity of 32. Override them with the `deepfind.extraction.*` Spring properties when developing or packaging.
+Extracted text is indexed into local Lucene postings but is not retained as a retrievable stored field. Extraction defaults are a 20 MiB file limit, 500,000 extracted characters, a 15-second deadline, two workers, and a queue capacity of 32. Override them with the `deepfind.extraction.*` Spring properties when developing or packaging.
 
 ## Documentation
 

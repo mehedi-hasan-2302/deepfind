@@ -2,7 +2,7 @@ package com.deepfind.index;
 
 final class LuceneIndexSchema {
 
-    static final String VERSION = "1";
+    static final String VERSION = "2";
     static final String VERSION_KEY = "deepfind.schema.version";
 
     static final String PATH_KEY = "pathKey";
@@ -10,6 +10,9 @@ final class LuceneIndexSchema {
     static final String FILENAME = "filename";
     static final String FILENAME_EXACT = "filenameExact";
     static final String PATH_TEXT = "pathText";
+    static final String CONTENT = "content";
+    static final String EXTRACTION_STATUS = "extractionStatus";
+    static final String EXTRACTION_REASON = "extractionReason";
     static final String EXTENSION = "extension";
     static final String KIND = "kind";
     static final String SIZE_BYTES = "sizeBytes";

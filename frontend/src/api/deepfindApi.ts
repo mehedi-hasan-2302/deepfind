@@ -32,7 +32,7 @@ export interface SearchResult {
   type: 'FILE' | 'DIRECTORY' | 'SYMBOLIC_LINK' | 'OTHER'
   sizeBytes: number
   modifiedAt: string
-  matchType: 'EXACT_FILENAME' | 'FILENAME_PREFIX' | 'FILENAME' | 'PATH'
+  matchType: 'EXACT_FILENAME' | 'FILENAME_PREFIX' | 'FILENAME' | 'PATH' | 'CONTENT'
 }
 
 export interface SearchResponse {

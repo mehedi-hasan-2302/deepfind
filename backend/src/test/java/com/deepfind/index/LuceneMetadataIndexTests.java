@@ -3,6 +3,8 @@ package com.deepfind.index;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.deepfind.extraction.ExtractionResult;
+import com.deepfind.extraction.ParsedDocument;
 import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.FileSystemEntryKind;
 import com.deepfind.filesystem.PathNormalizer;
@@ -96,6 +98,33 @@ class LuceneMetadataIndexTests {
     }
 
     @Test
+    void searchesPersistedContentWhileRankingFilenamesFirst() {
+        Path indexPath = temporaryDirectory.resolve("index");
+        FileMetadata contentMatch = metadata(temporaryDirectory.resolve("documents/contract.pdf"), 42);
+        FileMetadata filenameMatch = metadata(temporaryDirectory.resolve("documents/refund-policy.txt"), 21);
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(indexPath)) {
+            index.upsertContent(
+                    contentMatch,
+                    ExtractionResult.success(
+                            new ParsedDocument("customers may request a refund", "application/pdf", false)));
+            index.upsert(filenameMatch);
+            index.commit();
+
+            assertThat(index.search("refund", 10))
+                    .extracting(result -> result.metadata().filename())
+                    .containsExactly("refund-policy.txt", "contract.pdf");
+            assertThat(index.search("refund", 10).get(1).matchType()).isEqualTo(MetadataMatchType.CONTENT);
+        }
+
+        try (LuceneMetadataIndex reopened = new LuceneMetadataIndex(indexPath)) {
+            assertThat(reopened.search("customers", 10)).singleElement().satisfies(result -> {
+                assertThat(result.metadata().filename()).isEqualTo("contract.pdf");
+                assertThat(result.matchType()).isEqualTo(MetadataMatchType.CONTENT);
+            });
+        }
+    }
+
+    @Test
     void emptyQueriesAreSafeAndLimitsAreBounded() {
         try (LuceneMetadataIndex index = new LuceneMetadataIndex(temporaryDirectory.resolve("index"))) {
             assertThat(index.search("   ", 10)).isEmpty();
@@ -131,7 +160,7 @@ class LuceneMetadataIndexTests {
 
         assertThatThrownBy(() -> new LuceneMetadataIndex(indexPath))
                 .isInstanceOf(IndexSchemaMismatchException.class)
-                .hasMessageContaining("expected 1")
+                .hasMessageContaining("expected 2")
                 .hasMessageContaining("999");
     }
 

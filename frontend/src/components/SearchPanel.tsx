@@ -32,7 +32,7 @@ export function SearchPanel({ query, response, loading, error, onQueryChange }: 
         ) : null}
       </div>
 
-      <label className="visually-hidden" htmlFor="search">Search filenames and paths</label>
+      <label className="visually-hidden" htmlFor="search">Search filenames, paths, and document content</label>
       <div className="search-box">
         <span aria-hidden="true">⌕</span>
         <input
@@ -40,7 +40,7 @@ export function SearchPanel({ query, response, loading, error, onQueryChange }: 
           type="search"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Try invoice, thesis final, or a folder name"
+          placeholder="Try invoice, refund policy, or a folder name"
           autoComplete="off"
         />
         {loading ? <span className="searching-label" role="status">Searching…</span> : null}
@@ -50,8 +50,8 @@ export function SearchPanel({ query, response, loading, error, onQueryChange }: 
 
       {!hasQuery ? (
         <div className="search-empty">
-          <p>Search by the filename or any folder you remember.</p>
-          <span>Document content search arrives in Phase 2.</span>
+          <p>Search by a filename, folder, or words inside a supported document.</p>
+          <span>Content search supports text, Markdown, common source files, PDF, and DOCX.</span>
         </div>
       ) : null}
 
@@ -157,6 +157,7 @@ function matchLabel(matchType: SearchResult['matchType']) {
     FILENAME_PREFIX: 'Filename prefix',
     FILENAME: 'Filename',
     PATH: 'Folder path',
+    CONTENT: 'Document content',
   }[matchType]
 }
 

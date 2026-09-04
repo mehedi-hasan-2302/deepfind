@@ -2,7 +2,7 @@
 
 ## Current behavior
 
-DeepFind indexes selected filesystem metadata into a local Lucene directory. The default data directory is `${user.home}/.deepfind`, and `DEEPFIND_DATA_DIRECTORY` can override it. Supported document text can now be extracted locally under byte, character, concurrency, and time limits, but is currently held only in memory and is not yet added to the index. Search queries and extracted content are not logged by application code. The application does not send telemetry, load remote fonts, call cloud APIs, or upload indexed metadata or content.
+DeepFind indexes selected filesystem metadata and supported document terms into a local Lucene directory. The default data directory is `${user.home}/.deepfind`, and `DEEPFIND_DATA_DIRECTORY` can override it. Extraction runs locally under byte, character, concurrency, and time limits. Full extracted text is not retained as a retrievable stored field, but Lucene postings contain searchable terms and must be treated as sensitive local data. Search queries and extracted content are not logged by application code. The application does not send telemetry, load remote fonts, call cloud APIs, or upload indexed metadata or content.
 
 ## Product policy
 
@@ -19,4 +19,4 @@ The runtime backend binds to loopback only. The Vite development server also bin
 
 ## Future storage disclosure
 
-The Lucene metadata index is stored under `<data-directory>/index`. Database, settings, application-log, and extraction temporary-file paths will be documented before those stores are introduced. DeepFind will not claim its index is encrypted until encryption is actually implemented and verified.
+The Lucene search index is stored under `<data-directory>/index` and is not encrypted by DeepFind. No extraction temporary files are created by the current implementation. Database, settings, and application-log paths will be documented before those stores are introduced. DeepFind will not claim its index is encrypted until encryption is actually implemented and verified.
