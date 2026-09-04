@@ -19,6 +19,10 @@ API/UI -> application services -> domain contracts -> infrastructure adapters
 
 Controllers will not operate Lucene readers, Tika parsers, databases, or filesystem walkers directly.
 
+## Filesystem discovery
+
+Discovery uses Java NIO `walkFileTree` and emits immutable metadata, progress snapshots, and bounded failure descriptions through an observer. It does not retain the discovered tree in memory. Directory symlinks are indexed as link entries but are not followed. A small default exclusion set removes common generated trees; explicit exclusions can target an absolute subtree. See ADR 0005.
+
 ## Data flow
 
 The intended indexing pipeline is discovery → bounded metadata queue → metadata index → bounded extraction workers → content update → progress event. Metadata should become searchable before slower content extraction completes.
