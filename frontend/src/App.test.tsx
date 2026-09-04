@@ -29,6 +29,7 @@ describe('App', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: undefined })
   })
 
   it('explains the privacy promise and guides initial indexing', async () => {
@@ -117,6 +118,63 @@ describe('App', () => {
       '/api/search?query=thesis+final&limit=50',
       expect.objectContaining({ signal: expect.anything() }),
     )
+  })
+
+  it('opens, reveals, and copies paths from a result card', async () => {
+    const resultPath = 'D:\\Archive\\Thesis\\final_submission.docx'
+    const writeText = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString()
+      if (url === '/api/index/status') return jsonResponse(idleStatus)
+      if (url.startsWith('/api/search?')) {
+        return jsonResponse({
+          query: 'final',
+          tookMs: 2,
+          totalHits: 1,
+          results: [{
+            path: resultPath,
+            filename: 'final_submission.docx',
+            extension: 'docx',
+            type: 'FILE',
+            sizeBytes: 2048,
+            modifiedAt: '2026-08-31T10:30:00Z',
+            matchType: 'FILENAME_PREFIX',
+          }],
+        })
+      }
+      if (url === '/api/files/open') return jsonResponse({ action: 'OPENED' }, 202)
+      if (url === '/api/files/reveal') return jsonResponse({ action: 'REVEALED' }, 202)
+      return jsonResponse({}, 404)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'final' } })
+    const resultHeading = await screen.findByRole('heading', { name: 'final_submission.docx' })
+    const resultCard = within(resultHeading.closest('li')!)
+
+    fireEvent.click(resultCard.getByRole('button', { name: 'Open' }))
+    expect(await resultCard.findByText(/opened with the default application/i)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith('/api/files/open', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ path: resultPath }),
+    }))
+
+    fireEvent.click(resultCard.getByRole('button', { name: /show in folder/i }))
+    expect(await resultCard.findByText(/shown in the system file manager/i)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith('/api/files/reveal', expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ path: resultPath }),
+    }))
+
+    fireEvent.click(resultCard.getByRole('button', { name: 'Copy Path' }))
+    expect(await resultCard.findByText('Full path copied.')).toBeInTheDocument()
+    expect(writeText).toHaveBeenLastCalledWith(resultPath)
+
+    fireEvent.click(resultCard.getByRole('button', { name: 'Copy Folder' }))
+    expect(await resultCard.findByText('Folder path copied.')).toBeInTheDocument()
+    expect(writeText).toHaveBeenLastCalledWith('D:\\Archive\\Thesis')
   })
 
   it('shows backend and empty-result states without hiding the search interface', async () => {

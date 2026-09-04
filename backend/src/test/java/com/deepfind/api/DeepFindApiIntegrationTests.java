@@ -1,5 +1,7 @@
 package com.deepfind.api;
 
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -7,6 +9,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.deepfind.jobs.IndexingJobService;
 import com.deepfind.jobs.IndexingJobState;
+import com.deepfind.platform.FileActions;
+import com.deepfind.platform.InvalidFileActionException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -16,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
@@ -27,6 +32,9 @@ class DeepFindApiIntegrationTests {
 
     @Autowired
     private IndexingJobService jobs;
+
+    @MockitoBean
+    private FileActions fileActions;
 
     @TempDir
     Path root;
@@ -77,6 +85,43 @@ class DeepFindApiIntegrationTests {
         mockMvc.perform(get("/api/search").param("query", " "))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void delegatesValidatedFileActionsThroughTheHttpApi() throws Exception {
+        Path file = Files.writeString(root.resolve("final report.txt"), "metadata only");
+        String requestJson = "{\"path\":\"" + jsonEscape(file.toString()) + "\"}";
+
+        mockMvc.perform(post("/api/files/open")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.action").value("OPENED"));
+        mockMvc.perform(post("/api/files/reveal")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.action").value("REVEALED"));
+
+        verify(fileActions).open(file);
+        verify(fileActions).reveal(file);
+    }
+
+    @Test
+    void returnsAStableErrorWhenAFileActionIsRejected() throws Exception {
+        Path missing = root.resolve("missing.txt");
+        String requestJson = "{\"path\":\"" + jsonEscape(missing.toString()) + "\"}";
+        doThrow(new InvalidFileActionException("This file or folder no longer exists."))
+                .when(fileActions)
+                .open(missing);
+
+        mockMvc.perform(post("/api/files/open")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(requestJson))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("FILE_ACTION_INVALID"))
+                .andExpect(jsonPath("$.message").value("This file or folder no longer exists."))
+                .andExpect(jsonPath("$.details").isMap());
     }
 
     private void awaitCompleted(Duration timeout) throws InterruptedException {

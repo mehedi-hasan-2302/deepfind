@@ -42,6 +42,10 @@ export interface SearchResponse {
   results: SearchResult[]
 }
 
+export interface FileActionResponse {
+  action: 'OPENED' | 'REVEALED'
+}
+
 interface ApiErrorBody {
   code?: string
   message?: string
@@ -72,6 +76,22 @@ export async function startIndex(root: string): Promise<IndexStatus> {
 export async function searchFiles(query: string, limit = 50, signal?: AbortSignal): Promise<SearchResponse> {
   const parameters = new URLSearchParams({ query, limit: String(limit) })
   return requestJson<SearchResponse>(`/api/search?${parameters}`, { signal })
+}
+
+export async function openFile(path: string): Promise<FileActionResponse> {
+  return requestFileAction('/api/files/open', path)
+}
+
+export async function revealFile(path: string): Promise<FileActionResponse> {
+  return requestFileAction('/api/files/reveal', path)
+}
+
+function requestFileAction(endpoint: string, path: string): Promise<FileActionResponse> {
+  return requestJson<FileActionResponse>(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
 }
 
 async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {

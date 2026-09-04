@@ -2,7 +2,7 @@
 
 > You remember what was in the file. DeepFind finds where you put it.
 
-DeepFind is a private, offline-first desktop search application for finding files by name, path, and—later in the MVP—the text inside supported documents. The repository is currently in **Phase 1: Basic File Metadata Search**. Users can select a local folder by path, monitor indexing, and search the resulting filename/path index from the web interface.
+DeepFind is a private, offline-first desktop search application for finding files by name, path, and—later in the MVP—the text inside supported documents. **Phase 1: Basic File Metadata Search is complete.** Users can select a local folder by path, monitor indexing, search the resulting filename/path index, open or reveal results, and copy paths from the web interface.
 
 ## Privacy baseline
 

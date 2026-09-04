@@ -1,4 +1,11 @@
-import type { SearchResponse, SearchResult } from '../api/deepfindApi'
+import { useState } from 'react'
+import {
+  DeepFindApiError,
+  openFile,
+  revealFile,
+  type SearchResponse,
+  type SearchResult,
+} from '../api/deepfindApi'
 
 interface SearchPanelProps {
   query: string
@@ -65,6 +72,40 @@ export function SearchPanel({ query, response, loading, error, onQueryChange }: 
 }
 
 function ResultCard({ result }: { result: SearchResult }) {
+  const [pendingAction, setPendingAction] = useState<'open' | 'reveal' | 'copy' | null>(null)
+  const [feedback, setFeedback] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  async function performSystemAction(action: 'open' | 'reveal') {
+    setPendingAction(action)
+    setFeedback(null)
+    setActionError(null)
+    try {
+      if (action === 'open') await openFile(result.path)
+      else await revealFile(result.path)
+      setFeedback(action === 'open' ? 'Opened with the default application.' : 'Shown in the system file manager.')
+    } catch (error) {
+      setActionError(error instanceof DeepFindApiError ? error.message : 'DeepFind could not complete the action.')
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
+  async function copyPath(value: string, label: string) {
+    setPendingAction('copy')
+    setFeedback(null)
+    setActionError(null)
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(value)
+      setFeedback(`${label} copied.`)
+    } catch {
+      setActionError('DeepFind could not access the clipboard.')
+    } finally {
+      setPendingAction(null)
+    }
+  }
+
   return (
     <li className="result-card">
       <div className="file-icon" aria-hidden="true">{result.type === 'DIRECTORY' ? 'D' : result.extension.slice(0, 3) || 'FILE'}</div>
@@ -75,9 +116,39 @@ function ResultCard({ result }: { result: SearchResult }) {
         </div>
         <p className="result-path" title={result.path}>{result.path}</p>
         <p className="result-meta">{typeLabel(result)} · Modified {formatDate(result.modifiedAt)}</p>
+        <div className="result-actions" aria-label={`Actions for ${result.filename}`}>
+          <button type="button" onClick={() => void performSystemAction('open')} disabled={pendingAction !== null}>
+            {pendingAction === 'open' ? 'Opening…' : 'Open'}
+          </button>
+          <button type="button" onClick={() => void performSystemAction('reveal')} disabled={pendingAction !== null}>
+            {pendingAction === 'reveal' ? 'Showing…' : 'Show in Folder'}
+          </button>
+          <button type="button" onClick={() => void copyPath(result.path, 'Full path')} disabled={pendingAction !== null}>
+            Copy Path
+          </button>
+          <button
+            type="button"
+            onClick={() => void copyPath(containingFolder(result.path), 'Folder path')}
+            disabled={pendingAction !== null}
+          >
+            Copy Folder
+          </button>
+        </div>
+        <div className="action-feedback" aria-live="polite">
+          {feedback ? <p>{feedback}</p> : null}
+          {actionError ? <p className="action-error" role="alert">{actionError}</p> : null}
+        </div>
       </div>
     </li>
   )
+}
+
+function containingFolder(path: string) {
+  const separatorIndex = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'))
+  if (separatorIndex < 0) return path
+  if (separatorIndex === 0) return path.slice(0, 1)
+  if (separatorIndex === 2 && /^[a-z]:/i.test(path)) return path.slice(0, 3)
+  return path.slice(0, separatorIndex)
 }
 
 function matchLabel(matchType: SearchResult['matchType']) {

@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 1 provides an end-to-end metadata-search slice: local filesystem discovery, a persistent Lucene filename/path index, a loopback API, and a React indexing/search interface. Content extraction and desktop packaging remain deferred.
+Phase 1 provides an end-to-end metadata-search slice: local filesystem discovery, a persistent Lucene filename/path index, a loopback API, a React indexing/search interface, and guarded platform file actions. Content extraction and desktop packaging remain deferred.
 
 ## Components
 
@@ -55,4 +55,4 @@ Lucene schema version 1 indexes filenames and paths with a delimiter-aware lower
 
 ## Platform integration
 
-Open and reveal actions will live behind a platform abstraction. Windows is the first development target, while path handling will use Java `Path` APIs to preserve later macOS/Linux support.
+Open and reveal actions live behind the `FileActions` platform abstraction and narrow loopback POST endpoints. Requests must identify an existing absolute path. The implementation passes paths as discrete process arguments without shell interpolation: Explorer on Windows, `open` on macOS, and `xdg-open` on Linux. Clipboard operations stay in the browser. See ADR 0008.

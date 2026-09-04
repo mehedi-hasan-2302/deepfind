@@ -451,6 +451,48 @@ button:disabled {
   margin: 0.45rem 0 0;
 }
 
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+}
+
+.result-actions button {
+  padding: 0.42rem 0.65rem;
+  border: 1px solid #b8c5be;
+  border-radius: 0.5rem;
+  color: #335046;
+  background: #f2f6f3;
+  font-size: 0.74rem;
+}
+
+.result-actions button:first-child {
+  border-color: #245f43;
+  color: #fff;
+  background: #245f43;
+}
+
+.result-actions button:hover:not(:disabled) {
+  color: #fff;
+  background: #194d35;
+}
+
+.action-feedback {
+  min-height: 1.1rem;
+  margin-top: 0.45rem;
+  color: #327254;
+  font-size: 0.72rem;
+}
+
+.action-feedback p {
+  margin: 0;
+}
+
+.action-feedback .action-error {
+  color: #812d2b;
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

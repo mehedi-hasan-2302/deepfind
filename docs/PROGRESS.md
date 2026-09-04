@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 1 — Basic File Metadata Search (in progress)
+Phase 1 — Basic File Metadata Search (complete)
 
 ## Last completed step
 
-STEP 5 — Connect the frontend indexing and metadata-search experience.
+STEP 6 — Add safe file actions and complete Phase 1.
 
 ## Completed
 
@@ -27,10 +27,13 @@ STEP 5 — Connect the frontend indexing and metadata-search experience.
 - Folder-path onboarding with asynchronous indexing start, running-only status polling, progress metrics, and readable failure states.
 - Debounced filename/path search with stale-request cancellation, timing and hit counts, explanatory match badges, responsive result cards, and accessible empty/loading/error states.
 - Vite `/api` development proxy to the loopback backend without broadening the backend CORS or network boundary.
+- Guarded platform abstraction for opening and revealing existing absolute paths on Windows, macOS, and Linux without shell interpolation.
+- Narrow file-action endpoints with stable invalid/unavailable errors and no generic process-execution surface.
+- Result-card controls for Open, Show in Folder, Copy Path, and Copy Folder with accessible per-result feedback.
 
 ## Current behavior
 
-The frontend and backend now provide the central metadata-search loop. A user can enter a local folder path, start indexing, follow live progress, and search filenames and directories with explanatory result context. The Lucene index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. Indexed roots are not yet persisted as configuration.
+The frontend and backend now provide the complete Phase 1 metadata-search loop. A user can enter a local folder path, start indexing, follow live progress, search filenames and directories with explanatory result context, and open, reveal, or copy paths from each result. The Lucene index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. Indexed roots are not yet persisted as configuration.
 
 ## Commands verified
 
@@ -44,6 +47,8 @@ The frontend and backend now provide the central metadata-search loop. A user ca
 - `npm run check` in `frontend` after STEP 5 — passed; ESLint, 4 Vitest interaction tests, TypeScript, and Vite production build succeeded.
 - `backend\mvnw.cmd verify --batch-mode --no-transfer-progress` after STEP 5 — passed through the repaired Windows launcher; 21 tests passed and one host-dependent symlink test was skipped.
 - STEP 5 live integration smoke test — frontend HTTP 200; proxied `/api/health` returned `UP`; proxied `/api/index/status` returned `IDLE`.
+- `backend\mvnw.cmd spotless:apply verify --batch-mode --no-transfer-progress` after STEP 6 — passed; 27 tests covered platform commands and HTTP contracts, with one host-dependent symlink test skipped.
+- `npm run check` in `frontend` after STEP 6 — passed; ESLint, 5 Vitest interaction tests, TypeScript, and Vite production build succeeded.
 
 ## Known failures
 
@@ -51,7 +56,7 @@ No product failures recorded. Maven is not installed globally, so all backend co
 
 ## Next recommended step
 
-Add platform-safe file actions: backend abstractions and validated endpoints for opening a result and revealing it in the system file manager, then expose Open, Show in Folder, and Copy Path actions on result cards.
+Begin Phase 2 with a bounded content-extraction policy and parser abstraction, then introduce Apache Tika for explicitly supported document types with size, timeout, and failure limits.
 
 ## Important architectural notes
 
@@ -62,4 +67,5 @@ Add platform-safe file actions: backend abstractions and validated endpoints for
 - Directory symlinks are indexed but not followed; see ADR 0005.
 - Lucene schema version 1 and field behavior are documented in ADR 0006.
 - The asynchronous loopback API and process-local job policy are documented in ADR 0007.
+- Validated, shell-free platform action behavior is documented in ADR 0008.
 - SQLite, Tika, and the desktop shell remain deferred until their owning steps/phases.

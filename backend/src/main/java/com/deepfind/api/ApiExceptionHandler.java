@@ -3,6 +3,8 @@ package com.deepfind.api;
 import com.deepfind.index.IndexAccessException;
 import com.deepfind.jobs.IndexRootNotAccessibleException;
 import com.deepfind.jobs.IndexingAlreadyRunningException;
+import com.deepfind.platform.FileActionUnavailableException;
+import com.deepfind.platform.InvalidFileActionException;
 import jakarta.validation.ConstraintViolationException;
 import java.nio.file.InvalidPathException;
 import java.util.Map;
@@ -32,6 +34,16 @@ public class ApiExceptionHandler {
                 "INDEX_UNAVAILABLE",
                 "DeepFind's local search index is unavailable.",
                 Map.of());
+    }
+
+    @ExceptionHandler(InvalidFileActionException.class)
+    ResponseEntity<ApiError> invalidFileAction(InvalidFileActionException exception) {
+        return error(HttpStatus.BAD_REQUEST, "FILE_ACTION_INVALID", exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(FileActionUnavailableException.class)
+    ResponseEntity<ApiError> unavailableFileAction(FileActionUnavailableException exception) {
+        return error(HttpStatus.SERVICE_UNAVAILABLE, "FILE_ACTION_UNAVAILABLE", exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler({MethodArgumentNotValidException.class, ConstraintViolationException.class})
