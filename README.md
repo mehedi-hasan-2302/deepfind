@@ -2,7 +2,7 @@
 
 > You remember what was in the file. DeepFind finds where you put it.
 
-DeepFind is a private, offline-first desktop search application for finding files by name, path, and—later in the MVP—the text inside supported documents. The repository is currently in **Phase 0: Repository Foundation**; indexing and search behavior have not been implemented yet.
+DeepFind is a private, offline-first desktop search application for finding files by name, path, and—later in the MVP—the text inside supported documents. The repository is currently in **Phase 1: Basic File Metadata Search**. Users can select a local folder by path, monitor indexing, and search the resulting filename/path index from the web interface.
 
 ## Privacy baseline
 
@@ -41,7 +41,7 @@ npm install
 npm run dev
 ```
 
-The backend listens only on `http://127.0.0.1:8080`. The frontend development server listens on `http://127.0.0.1:5173`.
+The backend listens only on `http://127.0.0.1:8080`. The frontend development server listens on `http://127.0.0.1:5173` and proxies relative `/api` requests to that loopback backend.
 
 ## Verify
 

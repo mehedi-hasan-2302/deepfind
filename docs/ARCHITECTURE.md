@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 0 establishes the development boundary. Indexing, persistence, and desktop packaging are not implemented yet.
+Phase 1 provides an end-to-end metadata-search slice: local filesystem discovery, a persistent Lucene filename/path index, a loopback API, and a React indexing/search interface. Content extraction and desktop packaging remain deferred.
 
 ## Components
 
@@ -27,7 +27,9 @@ Discovery uses Java NIO `walkFileTree` and emits immutable metadata, progress sn
 
 The intended indexing pipeline is discovery → bounded metadata queue → metadata index → bounded extraction workers → content update → progress event. Metadata should become searchable before slower content extraction completes.
 
-The intended search pipeline is query parsing → normalization and filters → Lucene query → ranking → snippets → API DTOs.
+The current search pipeline is React's debounced query state → relative `/api/search` request → normalization → Lucene query → filename-first ranking → explanatory match category → API DTO → result card. Content snippets and filters remain future extensions.
+
+During development, Vite proxies relative `/api` traffic to `127.0.0.1:8080`. This keeps browser calls same-origin without widening the backend's network or CORS boundary. The frontend polls indexing status only while a job is running and aborts obsolete search requests when the query changes.
 
 ## Concurrency
 

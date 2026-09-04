@@ -15,7 +15,7 @@ DeepFind indexes selected filesystem metadata into a local Lucene directory. The
 
 ## Network behavior
 
-The runtime backend binds to loopback only. Development tools may contact package repositories while installing dependencies; that is build-time behavior, not application telemetry.
+The runtime backend binds to loopback only. The Vite development server also binds to loopback and proxies relative `/api` requests to the backend; no broad CORS policy is enabled. Development tools may contact package repositories while installing dependencies; that is build-time behavior, not application telemetry.
 
 ## Future storage disclosure
 

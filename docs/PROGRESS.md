@@ -6,7 +6,7 @@ Phase 1 — Basic File Metadata Search (in progress)
 
 ## Last completed step
 
-STEP 4 — Expose asynchronous indexing and search APIs.
+STEP 5 — Connect the frontend indexing and metadata-search experience.
 
 ## Completed
 
@@ -23,10 +23,14 @@ STEP 4 — Expose asynchronous indexing and search APIs.
 - Application-managed Lucene storage with a configurable local data directory and clean Spring shutdown.
 - Single-worker asynchronous indexing jobs with current progress, completion/failure state, and concurrent-start rejection.
 - Validated indexing/status/search endpoints with stable safe error DTOs and full-context HTTP integration coverage.
+- Typed frontend API client using relative loopback requests, explicit error mapping, and cancellation support.
+- Folder-path onboarding with asynchronous indexing start, running-only status polling, progress metrics, and readable failure states.
+- Debounced filename/path search with stale-request cancellation, timing and hit counts, explanatory match badges, responsive result cards, and accessible empty/loading/error states.
+- Vite `/api` development proxy to the loopback backend without broadening the backend CORS or network boundary.
 
 ## Current behavior
 
-The running backend can accept a local folder through `POST /api/index/start`, process it asynchronously, report progress through `GET /api/index/status`, and return filename/path results through `GET /api/search`. The Lucene index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. The frontend does not yet call these APIs, and indexed roots are not persisted as configuration.
+The frontend and backend now provide the central metadata-search loop. A user can enter a local folder path, start indexing, follow live progress, and search filenames and directories with explanatory result context. The Lucene index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. Indexed roots are not yet persisted as configuration.
 
 ## Commands verified
 
@@ -37,14 +41,17 @@ The running backend can accept a local folder through `POST /api/index/start`, p
 - `backend\mvnw.cmd verify --batch-mode --no-transfer-progress` after STEP 2 — passed; 10 tests, package, and Spotless check succeeded. One symlink test was skipped because this Windows session does not permit symlink creation.
 - `backend\mvnw.cmd verify --batch-mode --no-transfer-progress` after STEP 3 — passed; 18 tests, package, and Spotless check succeeded. One host-dependent symlink test was skipped.
 - `backend\mvnw.cmd verify --batch-mode --no-transfer-progress` after STEP 4 — passed; 21 tests, full HTTP flow, concurrency invariant, package, and Spotless check succeeded. One host-dependent symlink test was skipped.
+- `npm run check` in `frontend` after STEP 5 — passed; ESLint, 4 Vitest interaction tests, TypeScript, and Vite production build succeeded.
+- `backend\mvnw.cmd verify --batch-mode --no-transfer-progress` after STEP 5 — passed through the repaired Windows launcher; 21 tests passed and one host-dependent symlink test was skipped.
+- STEP 5 live integration smoke test — frontend HTTP 200; proxied `/api/health` returned `UP`; proxied `/api/index/status` returned `IDLE`.
 
 ## Known failures
 
-No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation.
+No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation.
 
 ## Next recommended step
 
-Connect the frontend to the local API: add a folder-path onboarding form, indexing status polling, debounced metadata search, accessible result cards, empty/error states, and component tests. Platform open/reveal actions remain the following module.
+Add platform-safe file actions: backend abstractions and validated endpoints for opening a result and revealing it in the system file manager, then expose Open, Show in Folder, and Copy Path actions on result cards.
 
 ## Important architectural notes
 
