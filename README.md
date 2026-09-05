@@ -2,7 +2,7 @@
 
 > You remember what was in the file. DeepFind finds where you put it.
 
-DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–3 are complete, and Phase 4 is underway.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor indexing, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface. Recursive filesystem detection and bounded incremental Lucene updates are implemented; connecting their lifecycle to the selected root is the next module.
+DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–3 are complete, and Phase 4 is underway.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor indexing, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface. The selected root is now watched automatically, so ordinary create, edit, rename, and delete activity updates Lucene after indexing. Reconciliation and manual refresh remain in progress.
 
 ## Privacy baseline
 

@@ -6,7 +6,7 @@ Phase 4 — Incremental Updates and Freshness (in progress)
 
 ## Last completed step
 
-STEP 13 — Apply filesystem changes incrementally to Lucene.
+STEP 14 — Coordinate selected-root watcher lifecycle.
 
 ## Completed
 
@@ -64,10 +64,15 @@ STEP 13 — Apply filesystem changes incrementally to Lucene.
 - Portable rename handling as delete-old plus create-new without unsafe identity inference or prefix collisions.
 - Explicit reconciliation-required state for overflow, watcher failure, out-of-root input, unreadable metadata, processing failure, and forced shutdown.
 - Incremental integration coverage for content replacement, deletion, directory rename, similarly prefixed siblings, uncertainty signals, exclusions, and shutdown draining.
+- Automatic restoration of the persisted selected root into one active native-watcher and incremental-indexing session pair.
+- Full indexing integration that stops the native producer, drains accepted incremental work, and resumes watching after either success or failure.
+- Root-switch and application-shutdown ordering that closes old producers before consumers and consumers before Lucene dependencies.
+- Safe internal stopped, watching, reconciliation-required, and failed states without making an unavailable persisted folder fatal to startup.
+- Native end-to-end coverage proving post-start create, content edit, and delete operations update search results, plus root-switch and unavailable-root behavior.
 
 ## Current behavior
 
-The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned to reconcile changes. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. The watcher and incremental mutation boundaries now exist and are tested independently, but selected-root lifecycle wiring is still pending, so the running product does not update search results automatically yet.
+The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned. The persisted selected root is watched automatically, and ordinary create, content edit, rename, and delete events update search results. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Native overflow and the full-scan watch gap are detected or documented uncertainty but do not yet trigger automatic reconciliation; watcher status is not yet exposed in the UI.
 
 ## Commands verified
 
@@ -95,6 +100,7 @@ The user can index a local folder and search filenames, paths, and text inside s
 - `npm run check` in `frontend` after STEP 11 — passed; ESLint, 7 Vitest interaction tests (including interrupted-run recovery guidance), TypeScript, and Vite production build succeeded.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 12 — passed; 59 tests, executable backend JAR packaging, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 13 — passed; 64 tests, executable backend JAR packaging, Spring configuration binding, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
+- `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 14 — passed; 67 tests, native end-to-end freshness, job lifecycle integration, executable backend JAR packaging, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 
 ## Known failures
 
@@ -102,7 +108,7 @@ No product failures recorded. Maven is not installed globally, so all backend co
 
 ## Next recommended step
 
-Coordinate watcher and incremental-session lifecycle for the selected root, then add automatic and manual reconciliation without overlapping full indexing jobs.
+Add automatic reconciliation for watcher uncertainty and the full-scan observation gap, without overlapping full indexing jobs; then expose a manual refresh action.
 
 ## Important architectural notes
 
@@ -118,6 +124,7 @@ Coordinate watcher and incremental-session lifecycle for the selected root, then
 - SQLite owns structured local state under the shared data directory; see ADR 0012. Scan history, checkpointing, and interrupted-run recovery are defined by ADR 0013.
 - Recursive watcher semantics, exclusion behavior, synchronous delivery, and overflow-as-reconciliation-signal are defined by ADR 0014.
 - Bounded ordered event application, recursive directory creation, subtree deletion, rename semantics, and reconciliation triggers are defined by ADR 0015.
+- Persisted-root restoration, single active-session ownership, full-scan pause/resume, and shutdown ordering are defined by ADR 0016.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
 - Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
 - The desktop shell remains deferred until its owning phase.

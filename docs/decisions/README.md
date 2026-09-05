@@ -17,3 +17,4 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0013 — Persist scan lifecycle and classify interrupted runs](0013-persist-scan-lifecycle.md)
 - [0014 — Use a recursive, reconciliation-aware filesystem watcher](0014-recursive-filesystem-watcher.md)
 - [0015 — Apply filesystem events through a bounded serial index session](0015-bounded-incremental-index-application.md)
+- [0016 — Coordinate one active watcher with full indexing jobs](0016-coordinate-selected-root-watcher-lifecycle.md)

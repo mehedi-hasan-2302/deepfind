@@ -6,6 +6,7 @@ import com.deepfind.filesystem.DiscoveryProgress;
 import com.deepfind.filesystem.ExclusionPolicy;
 import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.PathNormalizer;
+import com.deepfind.index.IndexWatchLifecycle;
 import com.deepfind.index.MetadataIndexingOutcome;
 import com.deepfind.index.MetadataIndexingService;
 import com.deepfind.persistence.RootCatalog;
@@ -45,17 +46,22 @@ public class IndexingJobService {
     private final MetadataIndexingService indexingService;
     private final RootCatalog rootCatalog;
     private final ScanHistoryRepository scanHistory;
+    private final IndexWatchLifecycle watchLifecycle;
     private final Clock clock;
     private final ExecutorService executor;
     private final AtomicReference<IndexingJobStatus> status;
 
     @Autowired
     public IndexingJobService(
-            MetadataIndexingService indexingService, RootCatalog rootCatalog, ScanHistoryRepository scanHistory) {
+            MetadataIndexingService indexingService,
+            RootCatalog rootCatalog,
+            ScanHistoryRepository scanHistory,
+            IndexWatchLifecycle watchLifecycle) {
         this(
                 indexingService,
                 rootCatalog,
                 scanHistory,
+                watchLifecycle,
                 Clock.systemUTC(),
                 Executors.newSingleThreadExecutor(runnable -> {
                     Thread thread = new Thread(runnable, "deepfind-indexer");
@@ -70,9 +76,20 @@ public class IndexingJobService {
             ScanHistoryRepository scanHistory,
             Clock clock,
             ExecutorService executor) {
+        this(indexingService, rootCatalog, scanHistory, ignoredLifecycle(), clock, executor);
+    }
+
+    IndexingJobService(
+            MetadataIndexingService indexingService,
+            RootCatalog rootCatalog,
+            ScanHistoryRepository scanHistory,
+            IndexWatchLifecycle watchLifecycle,
+            Clock clock,
+            ExecutorService executor) {
         this.indexingService = Objects.requireNonNull(indexingService, "indexingService must not be null");
         this.rootCatalog = Objects.requireNonNull(rootCatalog, "rootCatalog must not be null");
         this.scanHistory = Objects.requireNonNull(scanHistory, "scanHistory must not be null");
+        this.watchLifecycle = Objects.requireNonNull(watchLifecycle, "watchLifecycle must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.executor = Objects.requireNonNull(executor, "executor must not be null");
         this.status = new AtomicReference<>(scanHistory
@@ -97,6 +114,7 @@ public class IndexingJobService {
         rootCatalog.rememberSelected(root, startedAt);
         UUID jobId = UUID.randomUUID();
         scanHistory.start(jobId, root, startedAt);
+        watchLifecycle.pause();
         IndexingJobStatus started = IndexingJobStatus.running(jobId, root, startedAt);
         status.set(started);
         executor.submit(() -> run(started));
@@ -172,7 +190,26 @@ public class IndexingJobService {
                         started.jobId(),
                         persistenceException.getClass().getSimpleName());
             }
+        } finally {
+            try {
+                watchLifecycle.watch(started.root());
+            } catch (RuntimeException exception) {
+                LOGGER.error(
+                        "Filesystem change tracking could not resume after indexing job {}: {}.",
+                        started.jobId(),
+                        exception.getClass().getSimpleName());
+            }
         }
+    }
+
+    private static IndexWatchLifecycle ignoredLifecycle() {
+        return new IndexWatchLifecycle() {
+            @Override
+            public void pause() {}
+
+            @Override
+            public void watch(Path root) {}
+        };
     }
 
     private static boolean shouldCheckpoint(long entries, long previousEntries, Instant now, Instant previousAt) {

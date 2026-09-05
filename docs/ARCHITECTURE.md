@@ -2,7 +2,7 @@
 
 ## Status
 
-Phases 1–3 provide an end-to-end local search slice with durable index, root configuration, scan history, and interrupted-run detection. Phase 4 now has recursive filesystem detection and a bounded incremental Lucene update boundary. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, guarded platform file actions, and event application are implemented. Selected-root watcher lifecycle, reconciliation, manual refresh, and desktop packaging remain pending.
+Phases 1–3 provide an end-to-end local search slice with durable index, root configuration, scan history, and interrupted-run detection. Phase 4 now has automatic selected-root watching and bounded incremental Lucene updates. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, guarded platform file actions, event application, and watcher lifecycle coordination are implemented. Reconciliation, manual refresh, watcher-status UX, and desktop packaging remain pending.
 
 ## Components
 
@@ -32,6 +32,10 @@ Each watch session owns one daemon thread and invokes its observer synchronously
 `IncrementalIndexingService` opens one application session per root. Its fixed-capacity queue blocks the watcher producer when full, and its single daemon worker preserves accepted event order. Each drained burst keeps only the strongest latest event per normalized path, preserving create over a following redundant modify, and commits once after its direct mutations. Queue capacity defaults to 256 and graceful shutdown to 30 seconds.
 
 Create and modify events re-read no-follow metadata; regular files are re-extracted and replace the complete Lucene document. A newly created directory is discovered recursively so a moved-in populated tree is not missed. Delete removes the exact normalized path and every true descendant without matching similarly prefixed sibling names. Rename therefore works as the native delete-old plus create-new pair. Overflow, watcher failure, unreadable metadata, processing failure, forced shutdown, and out-of-root input set an explicit reconciliation-required flag. Excluded events are ignored. See ADR 0015.
+
+`IndexWatchCoordinator` owns the active native and incremental sessions. At startup it restores the persisted selected root without making an unavailable folder fatal to application startup. Selecting and fully indexing a root stops the native session first, drains its accepted incremental work, runs the full scan, and resumes watching in a `finally` path after success or failure. Switching roots closes the old pair before opening the new pair. Application shutdown closes the watcher before draining and closing the incremental session, which remains upstream of Lucene destruction.
+
+Pausing during a full scan prevents unordered watcher mutations from racing the traversal, but it introduces a window in which a change can occur after its path was visited and before watching resumes. The next reconciliation module must repair that window and all native overflow uncertainty. See ADR 0016.
 
 ## Data flow
 

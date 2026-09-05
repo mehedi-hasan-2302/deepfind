@@ -10,6 +10,7 @@ import com.deepfind.filesystem.DiscoveryObserver;
 import com.deepfind.filesystem.DiscoverySummary;
 import com.deepfind.filesystem.ExclusionPolicy;
 import com.deepfind.filesystem.FileSystemDiscoveryService;
+import com.deepfind.index.IndexWatchLifecycle;
 import com.deepfind.index.LuceneMetadataIndex;
 import com.deepfind.index.MetadataIndexingService;
 import com.deepfind.persistence.RootCatalog;
@@ -41,6 +42,7 @@ class IndexingJobServiceTests {
     @Test
     void rejectsASecondJobWhileTheWriterIsBusy() throws Exception {
         BlockingDiscoveryService discovery = new BlockingDiscoveryService();
+        RecordingWatchLifecycle watchLifecycle = new RecordingWatchLifecycle();
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try (LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("index"))) {
             MetadataIndexingService indexing = new MetadataIndexingService(
@@ -52,11 +54,13 @@ class IndexingJobServiceTests {
                     indexing,
                     new RecordingRootCatalog(null),
                     new RecordingScanHistory(null),
+                    watchLifecycle,
                     Clock.fixed(Instant.parse("2026-09-04T06:00:00Z"), ZoneOffset.UTC),
                     executor);
             try {
                 assertThat(jobs.start(root).state()).isEqualTo(IndexingJobState.RUNNING);
                 assertThat(discovery.awaitStarted(Duration.ofSeconds(2))).isTrue();
+                assertThat(watchLifecycle.pauses).isOne();
 
                 assertThatThrownBy(() -> jobs.start(root))
                         .isInstanceOf(IndexingAlreadyRunningException.class)
@@ -65,6 +69,8 @@ class IndexingJobServiceTests {
                 discovery.release();
                 awaitTerminal(jobs, Duration.ofSeconds(2));
                 assertThat(jobs.status().state()).isEqualTo(IndexingJobState.COMPLETED);
+                assertThat(watchLifecycle.watchedRoot)
+                        .isEqualTo(root.toAbsolutePath().normalize());
             } finally {
                 discovery.release();
                 jobs.shutdown();
@@ -252,6 +258,22 @@ class IndexingJobServiceTests {
         public void markIndexed(Path root, Instant indexedAt) {
             this.indexedRoot = root.toAbsolutePath().normalize();
             this.indexedAt = indexedAt;
+        }
+    }
+
+    private static final class RecordingWatchLifecycle implements IndexWatchLifecycle {
+
+        private volatile int pauses;
+        private volatile Path watchedRoot;
+
+        @Override
+        public void pause() {
+            pauses++;
+        }
+
+        @Override
+        public void watch(Path root) {
+            watchedRoot = root.toAbsolutePath().normalize();
         }
     }
 
