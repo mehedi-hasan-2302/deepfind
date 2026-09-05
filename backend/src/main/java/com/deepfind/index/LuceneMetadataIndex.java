@@ -8,6 +8,7 @@ import com.deepfind.search.MetadataMatchType;
 import com.deepfind.search.MetadataSearchPage;
 import com.deepfind.search.MetadataSearchResult;
 import com.deepfind.search.SearchSnippet;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -113,6 +114,20 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         } catch (IOException exception) {
             throw new IndexAccessException(
                     "DeepFind could not delete an entry from the local search index.", exception);
+        }
+    }
+
+    public void deleteTree(Path path) {
+        ensureOpen();
+        String normalizedPath = PathNormalizer.searchKey(path);
+        String descendantPrefix =
+                normalizedPath.endsWith(File.separator) ? normalizedPath : normalizedPath + File.separator;
+        try {
+            writer.deleteDocuments(
+                    new TermQuery(new Term(LuceneIndexSchema.PATH_KEY, normalizedPath)),
+                    new PrefixQuery(new Term(LuceneIndexSchema.PATH_KEY, descendantPrefix)));
+        } catch (IOException exception) {
+            throw new IndexAccessException("DeepFind could not delete a tree from the local search index.", exception);
         }
     }
 

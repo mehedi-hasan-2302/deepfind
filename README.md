@@ -2,7 +2,7 @@
 
 > You remember what was in the file. DeepFind finds where you put it.
 
-DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–3 are complete, and Phase 4 is underway.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor indexing, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface. A recursive filesystem watcher now detects normalized local changes; applying those events to the index is the next module.
+DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–3 are complete, and Phase 4 is underway.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor indexing, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface. Recursive filesystem detection and bounded incremental Lucene updates are implemented; connecting their lifecycle to the selected root is the next module.
 
 ## Privacy baseline
 
@@ -65,6 +65,8 @@ Desktop packaging is intentionally deferred to Phase 8. The production goal is o
 Local data defaults to `${user.home}/.deepfind`. Lucene keeps the search index under `index`, while SQLite keeps indexed-root records, application settings, scan history, progress checkpoints, and categorized scan failures in `deepfind.db` (with transient `deepfind.db-wal` and `deepfind.db-shm` files possible while running). Set `DEEPFIND_DATA_DIRECTORY` to override the shared parent directory. Flyway applies explicit database migrations at startup; a migration or corruption error stops startup instead of silently replacing local state.
 
 Extracted text is indexed into local Lucene postings. An extraction-bounded stored copy supports snippets; search responses return only a short excerpt of at most 240 content characters plus boundary ellipses. Extraction defaults are a 20 MiB file limit, 500,000 extracted characters, a 15-second deadline, two workers, and a queue capacity of 32. Override them with the `deepfind.extraction.*` Spring properties when developing or packaging.
+
+Incremental indexing uses a fixed event queue of 256 entries and waits up to 30 seconds for graceful shutdown. Override these development defaults with `deepfind.watcher.queue-capacity` and `deepfind.watcher.shutdown-timeout`. When the queue is full, the watcher producer waits instead of allocating an unbounded backlog.
 
 ## Documentation
 

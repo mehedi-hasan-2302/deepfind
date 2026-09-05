@@ -137,7 +137,8 @@ public class FileSystemDiscoveryService {
         }
 
         private void recordEntry(Path path, BasicFileAttributes attributes) {
-            FileSystemEntryKind kind = entryKind(attributes);
+            FileMetadata metadata = FileMetadata.from(path, attributes);
+            FileSystemEntryKind kind = metadata.kind();
             entriesDiscovered++;
             switch (kind) {
                 case FILE -> filesDiscovered++;
@@ -145,18 +146,8 @@ public class FileSystemDiscoveryService {
                 case SYMBOLIC_LINK -> symbolicLinksDiscovered++;
                 case OTHER -> otherEntriesDiscovered++;
             }
-
-            Path absolutePath = PathNormalizer.absolute(path);
-            observer.onEntry(new FileMetadata(
-                    absolutePath,
-                    PathNormalizer.searchKey(absolutePath),
-                    filename(absolutePath),
-                    extension(absolutePath, kind),
-                    kind,
-                    attributes.size(),
-                    attributes.lastModifiedTime().toInstant(),
-                    attributes.creationTime().toInstant()));
-            notifyProgress(absolutePath);
+            observer.onEntry(metadata);
+            notifyProgress(metadata.absolutePath());
         }
 
         private void recordSkipped(Path path) {
@@ -193,35 +184,6 @@ public class FileSystemDiscoveryService {
                     otherEntriesDiscovered,
                     entriesSkipped,
                     failures);
-        }
-
-        private static FileSystemEntryKind entryKind(BasicFileAttributes attributes) {
-            if (attributes.isSymbolicLink()) {
-                return FileSystemEntryKind.SYMBOLIC_LINK;
-            }
-            if (attributes.isRegularFile()) {
-                return FileSystemEntryKind.FILE;
-            }
-            if (attributes.isDirectory()) {
-                return FileSystemEntryKind.DIRECTORY;
-            }
-            return FileSystemEntryKind.OTHER;
-        }
-
-        private static String filename(Path path) {
-            Path filename = path.getFileName();
-            return filename == null ? path.toString() : filename.toString();
-        }
-
-        private static String extension(Path path, FileSystemEntryKind kind) {
-            if (kind == FileSystemEntryKind.DIRECTORY) {
-                return "";
-            }
-            String filename = filename(path);
-            int separator = filename.lastIndexOf('.');
-            return separator <= 0 || separator == filename.length() - 1
-                    ? ""
-                    : filename.substring(separator + 1).toLowerCase(java.util.Locale.ROOT);
         }
     }
 }

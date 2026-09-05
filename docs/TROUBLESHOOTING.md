@@ -19,6 +19,7 @@
 - Content extraction defaults to 20 MiB, 500,000 characters, and 15 seconds per file. Review `deepfind.extraction.*` settings if a legitimate local document is skipped.
 - Scanned/image-only PDFs require future local OCR support and normally provide no searchable text today.
 - Filesystem watcher tests use the host's native Java watch provider. Symbolic-link coverage is skipped when the current Windows account cannot create links. The watcher exposes provider overflow as a reconciliation signal; automatic index repair is part of the remaining Phase 4 work.
+- Incremental event buffering defaults to 256 entries. If diagnostics later show sustained watcher overflow on a very active tree, increasing `deepfind.watcher.queue-capacity` can absorb a larger burst but uses more memory; reconciliation is still required for correctness.
 
 ## Local database issues
 

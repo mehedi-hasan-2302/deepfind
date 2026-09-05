@@ -16,3 +16,4 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0012 — Use SQLite for structured local state](0012-sqlite-structured-state.md)
 - [0013 — Persist scan lifecycle and classify interrupted runs](0013-persist-scan-lifecycle.md)
 - [0014 — Use a recursive, reconciliation-aware filesystem watcher](0014-recursive-filesystem-watcher.md)
+- [0015 — Apply filesystem events through a bounded serial index session](0015-bounded-incremental-index-application.md)
