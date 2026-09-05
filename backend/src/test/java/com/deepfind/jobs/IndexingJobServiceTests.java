@@ -7,6 +7,7 @@ import com.deepfind.config.DeepFindExtractionProperties;
 import com.deepfind.extraction.ExtractionResult;
 import com.deepfind.extraction.ExtractionStatus;
 import com.deepfind.filesystem.DiscoveryObserver;
+import com.deepfind.filesystem.DiscoveryProgress;
 import com.deepfind.filesystem.DiscoverySummary;
 import com.deepfind.filesystem.ExclusionPolicy;
 import com.deepfind.filesystem.FileSystemDiscoveryService;
@@ -272,11 +273,76 @@ class IndexingJobServiceTests {
         }
     }
 
+    @Test
+    void pausesAtAProgressBoundaryAndResumesWithFreshReconciliation() throws Exception {
+        Path selectedRoot = java.nio.file.Files.createDirectory(root.resolve("pause-selected"));
+        PauseBoundaryDiscoveryService pauseDiscovery = new PauseBoundaryDiscoveryService();
+        RecordingScanHistory history = new RecordingScanHistory(null);
+        RecordingWatchLifecycle watchLifecycle = new RecordingWatchLifecycle();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        DeepFindExtractionProperties extractionProperties =
+                new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(1), 1, 2);
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("pause-index"))) {
+            MetadataIndexingService indexing = new MetadataIndexingService(
+                    pauseDiscovery,
+                    index,
+                    path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
+                    extractionProperties);
+            MetadataReconciliationService reconciliation = new MetadataReconciliationService(
+                    new FileSystemDiscoveryService(),
+                    index,
+                    path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
+                    extractionProperties);
+            IndexingJobService jobs = new IndexingJobService(
+                    indexing,
+                    reconciliation,
+                    new RecordingRootCatalog(selectedRoot),
+                    history,
+                    watchLifecycle,
+                    Clock.fixed(Instant.parse("2026-09-05T12:00:00Z"), ZoneOffset.UTC),
+                    executor);
+            try {
+                UUID firstJob = jobs.start(selectedRoot).jobId();
+                assertThat(pauseDiscovery.awaitBoundary(Duration.ofSeconds(2))).isTrue();
+
+                assertThat(jobs.pause().state()).isEqualTo(IndexingJobState.PAUSING);
+                assertThat(history.pauseRequested).isTrue();
+                pauseDiscovery.continueDiscovery();
+                awaitState(jobs, IndexingJobState.PAUSED, Duration.ofSeconds(2));
+
+                assertThat(jobs.status().errorMessage()).contains("Resume to reconcile");
+                assertThat(history.paused).isTrue();
+                assertThat(watchLifecycle.watchedRoot)
+                        .isEqualTo(selectedRoot.toAbsolutePath().normalize());
+
+                IndexingJobStatus resumed = jobs.resume();
+                assertThat(resumed.state()).isEqualTo(IndexingJobState.RUNNING);
+                assertThat(resumed.jobId()).isNotEqualTo(firstJob);
+                awaitTerminal(jobs, Duration.ofSeconds(2));
+                assertThat(jobs.status().state()).isEqualTo(IndexingJobState.COMPLETED);
+            } finally {
+                pauseDiscovery.continueDiscovery();
+                jobs.shutdown();
+            }
+        }
+    }
+
     private static void awaitTerminal(IndexingJobService jobs, Duration timeout) throws InterruptedException {
         long deadline = System.nanoTime() + timeout.toNanos();
-        while (jobs.status().state() == IndexingJobState.RUNNING && System.nanoTime() < deadline) {
+        while ((jobs.status().state() == IndexingJobState.RUNNING
+                        || jobs.status().state() == IndexingJobState.PAUSING)
+                && System.nanoTime() < deadline) {
             Thread.sleep(10);
         }
+    }
+
+    private static void awaitState(IndexingJobService jobs, IndexingJobState state, Duration timeout)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (jobs.status().state() != state && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertThat(jobs.status().state()).isEqualTo(state);
     }
 
     private static final class BlockingDiscoveryService extends FileSystemDiscoveryService {
@@ -310,6 +376,35 @@ class IndexingJobServiceTests {
         @Override
         public DiscoverySummary discover(Path root, ExclusionPolicy exclusions, DiscoveryObserver observer) {
             throw new IllegalStateException("simulated indexing failure");
+        }
+    }
+
+    private static final class PauseBoundaryDiscoveryService extends FileSystemDiscoveryService {
+
+        private final CountDownLatch boundary = new CountDownLatch(1);
+        private final CountDownLatch continued = new CountDownLatch(1);
+
+        @Override
+        public DiscoverySummary discover(Path root, ExclusionPolicy exclusions, DiscoveryObserver observer) {
+            Path absoluteRoot = root.toAbsolutePath().normalize();
+            observer.onProgress(new DiscoveryProgress(absoluteRoot, 1, 0, 1, 0, 0, 0, 0));
+            boundary.countDown();
+            try {
+                continued.await();
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Test discovery interrupted.", exception);
+            }
+            observer.onProgress(new DiscoveryProgress(absoluteRoot, 2, 1, 1, 0, 0, 0, 0));
+            return new DiscoverySummary(absoluteRoot, 2, 1, 1, 0, 0, 0, 0);
+        }
+
+        boolean awaitBoundary(Duration timeout) throws InterruptedException {
+            return boundary.await(timeout.toMillis(), TimeUnit.MILLISECONDS);
+        }
+
+        void continueDiscovery() {
+            continued.countDown();
         }
     }
 
@@ -365,6 +460,8 @@ class IndexingJobServiceTests {
         private volatile UUID startedJobId;
         private volatile ScanJobState finishedState;
         private volatile ScanJobMetrics finishedMetrics;
+        private volatile boolean pauseRequested;
+        private volatile boolean paused;
 
         private RecordingScanHistory(ScanJobRecord interrupted) {
             this.interrupted = interrupted;
@@ -382,6 +479,16 @@ class IndexingJobServiceTests {
 
         @Override
         public void checkpoint(UUID jobId, Path currentPath, ScanJobMetrics metrics) {}
+
+        @Override
+        public void requestPause(UUID jobId, Path currentPath, ScanJobMetrics metrics) {
+            pauseRequested = true;
+        }
+
+        @Override
+        public void markPaused(UUID jobId, Path currentPath, ScanJobMetrics metrics, String message, Instant pausedAt) {
+            paused = true;
+        }
 
         @Override
         public void recordFailure(UUID jobId, Path path, String reason, String message, Instant recordedAt) {}

@@ -14,6 +14,10 @@ public interface ScanHistoryRepository {
 
     void checkpoint(UUID jobId, Path currentPath, ScanJobMetrics metrics);
 
+    void requestPause(UUID jobId, Path currentPath, ScanJobMetrics metrics);
+
+    void markPaused(UUID jobId, Path currentPath, ScanJobMetrics metrics, String message, Instant pausedAt);
+
     void recordFailure(UUID jobId, Path path, String reason, String message, Instant recordedAt);
 
     void finish(UUID jobId, ScanJobState state, ScanJobMetrics metrics, String errorMessage, Instant finishedAt);

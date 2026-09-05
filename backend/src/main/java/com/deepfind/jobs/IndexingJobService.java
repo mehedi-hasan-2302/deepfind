@@ -7,6 +7,7 @@ import com.deepfind.filesystem.ExclusionPolicy;
 import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.PathNormalizer;
 import com.deepfind.index.IndexWatchLifecycle;
+import com.deepfind.index.IndexingPausedException;
 import com.deepfind.index.MetadataIndexingOutcome;
 import com.deepfind.index.MetadataIndexingService;
 import com.deepfind.index.MetadataReconciliationService;
@@ -43,6 +44,8 @@ public class IndexingJobService {
             "Indexing stopped because the local search index could not be updated.";
     private static final String INTERRUPTED_MESSAGE =
             "The previous indexing run was interrupted. Start indexing again to reconcile this folder.";
+    private static final String PAUSED_MESSAGE =
+            "Indexing was paused safely. Resume to reconcile the folder from its current filesystem state.";
 
     private final MetadataIndexingService indexingService;
     private final MetadataReconciliationService reconciliationService;
@@ -52,6 +55,7 @@ public class IndexingJobService {
     private final Clock clock;
     private final ExecutorService executor;
     private final AtomicReference<IndexingJobStatus> status;
+    private final AtomicReference<UUID> pauseRequestedJob = new AtomicReference<>();
 
     @Autowired
     public IndexingJobService(
@@ -108,8 +112,13 @@ public class IndexingJobService {
         this.watchLifecycle = Objects.requireNonNull(watchLifecycle, "watchLifecycle must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.executor = Objects.requireNonNull(executor, "executor must not be null");
-        this.status = new AtomicReference<>(scanHistory
-                .interruptRunningJobs(clock.instant(), INTERRUPTED_MESSAGE)
+        var recovered = scanHistory.interruptRunningJobs(clock.instant(), INTERRUPTED_MESSAGE);
+        if (recovered.isEmpty()) {
+            recovered = scanHistory.findRecent(1).stream()
+                    .filter(record -> record.state() == ScanJobState.PAUSED)
+                    .findFirst();
+        }
+        this.status = new AtomicReference<>(recovered
                 .map(IndexingJobStatus::fromRecord)
                 .orElseGet(() ->
                         IndexingJobStatus.idle(rootCatalog.lastSelectedRoot().orElse(null))));
@@ -117,7 +126,7 @@ public class IndexingJobService {
 
     public synchronized IndexingJobStatus start(Path requestedRoot) {
         IndexingJobStatus current = status.get();
-        if (current.state() == IndexingJobState.RUNNING) {
+        if (isActive(current.state())) {
             throw new IndexingAlreadyRunningException();
         }
 
@@ -130,7 +139,7 @@ public class IndexingJobService {
     }
 
     public synchronized boolean reconcileSelectedRootIfIdle() {
-        if (status.get().state() == IndexingJobState.RUNNING || reconciliationService == null) {
+        if (isActive(status.get().state()) || reconciliationService == null) {
             return false;
         }
         Path root = rootCatalog.lastSelectedRoot().orElse(null);
@@ -142,7 +151,7 @@ public class IndexingJobService {
     }
 
     public synchronized IndexingJobStatus reconcileSelectedRoot() {
-        if (status.get().state() == IndexingJobState.RUNNING) {
+        if (isActive(status.get().state())) {
             throw new IndexingAlreadyRunningException();
         }
         Path root = rootCatalog.lastSelectedRoot().orElseThrow(NoIndexRootSelectedException::new);
@@ -153,6 +162,32 @@ public class IndexingJobService {
             throw new IllegalStateException("Reconciliation is unavailable.");
         }
         return schedule(PathNormalizer.absolute(root), false, true);
+    }
+
+    public synchronized IndexingJobStatus pause() {
+        IndexingJobStatus current = status.get();
+        if (current.state() != IndexingJobState.RUNNING) {
+            throw new IndexingJobStateConflictException("Only a running indexing job can be paused.");
+        }
+        scanHistory.requestPause(current.jobId(), current.currentPath(), metrics(current));
+        pauseRequestedJob.set(current.jobId());
+        IndexingJobStatus pausing = current.pausing();
+        status.set(pausing);
+        return pausing;
+    }
+
+    public synchronized IndexingJobStatus resume() {
+        IndexingJobStatus current = status.get();
+        if (current.state() != IndexingJobState.PAUSED) {
+            throw new IndexingJobStateConflictException("Only a paused indexing job can be resumed.");
+        }
+        if (!Files.isDirectory(current.root()) || !Files.isReadable(current.root())) {
+            throw new IndexRootNotAccessibleException("DeepFind cannot read the selected folder.");
+        }
+        if (reconciliationService == null) {
+            throw new IllegalStateException("Reconciliation is unavailable.");
+        }
+        return schedule(current.root(), false, true);
     }
 
     private IndexingJobStatus schedule(Path root, boolean rememberSelection, boolean reconciliation) {
@@ -205,6 +240,9 @@ public class IndexingJobService {
                 public void onProgress(DiscoveryProgress progress) {
                     long indexedEntries = indexed.get();
                     status.updateAndGet(current -> current.withProgress(progress, indexedEntries));
+                    if (started.jobId().equals(pauseRequestedJob.get())) {
+                        throw new IndexingPausedException();
+                    }
                     Instant now = clock.instant();
                     if (shouldCheckpoint(
                             progress.entriesDiscovered(), lastCheckpointEntries.get(), now, lastCheckpointAt.get())) {
@@ -218,26 +256,43 @@ public class IndexingJobService {
             MetadataIndexingOutcome outcome = reconciliation
                     ? reconciliationService.reconcileRoot(started.root(), ExclusionPolicy.defaults(), observer)
                     : indexingService.indexRoot(started.root(), ExclusionPolicy.defaults(), observer);
-            var finishedAt = clock.instant();
-            rootCatalog.markIndexed(started.root(), finishedAt);
-            scanHistory.finish(started.jobId(), ScanJobState.COMPLETED, metrics(outcome), null, finishedAt);
-            status.updateAndGet(current -> current.completed(outcome, finishedAt));
+            synchronized (this) {
+                var finishedAt = clock.instant();
+                pauseRequestedJob.compareAndSet(started.jobId(), null);
+                rootCatalog.markIndexed(started.root(), finishedAt);
+                scanHistory.finish(started.jobId(), ScanJobState.COMPLETED, metrics(outcome), null, finishedAt);
+                status.updateAndGet(current -> current.completed(outcome, finishedAt));
+            }
+        } catch (IndexingPausedException exception) {
+            synchronized (this) {
+                pauseRequestedJob.compareAndSet(started.jobId(), null);
+                IndexingJobStatus current = status.get();
+                if (started.jobId().equals(current.jobId()) && current.state() == IndexingJobState.PAUSING) {
+                    Instant pausedAt = clock.instant();
+                    IndexingJobStatus paused = current.paused(PAUSED_MESSAGE, pausedAt);
+                    scanHistory.markPaused(
+                            started.jobId(), paused.currentPath(), metrics(paused), PAUSED_MESSAGE, pausedAt);
+                    status.set(paused);
+                }
+            }
         } catch (RuntimeException exception) {
-            Instant failedAt = clock.instant();
-            IndexingJobStatus failed = status.get().failed(FAILED_MESSAGE, failedAt);
-            LOGGER.error(
-                    "Indexing job {} failed with {}.",
-                    started.jobId(),
-                    exception.getClass().getSimpleName());
-            try {
-                scanHistory.finish(started.jobId(), ScanJobState.FAILED, metrics(failed), FAILED_MESSAGE, failedAt);
-            } catch (RuntimeException persistenceException) {
+            synchronized (this) {
+                Instant failedAt = clock.instant();
+                IndexingJobStatus failed = status.get().failed(FAILED_MESSAGE, failedAt);
                 LOGGER.error(
-                        "Indexing job {} failure state could not be persisted: {}.",
+                        "Indexing job {} failed with {}.",
                         started.jobId(),
-                        persistenceException.getClass().getSimpleName());
-            } finally {
-                status.set(failed);
+                        exception.getClass().getSimpleName());
+                try {
+                    scanHistory.finish(started.jobId(), ScanJobState.FAILED, metrics(failed), FAILED_MESSAGE, failedAt);
+                } catch (RuntimeException persistenceException) {
+                    LOGGER.error(
+                            "Indexing job {} failure state could not be persisted: {}.",
+                            started.jobId(),
+                            persistenceException.getClass().getSimpleName());
+                } finally {
+                    status.set(failed);
+                }
             }
         } finally {
             try {
@@ -264,6 +319,12 @@ public class IndexingJobService {
     private static boolean shouldCheckpoint(long entries, long previousEntries, Instant now, Instant previousAt) {
         return entries - previousEntries >= CHECKPOINT_ENTRY_INTERVAL
                 || Duration.between(previousAt, now).compareTo(CHECKPOINT_TIME_INTERVAL) >= 0;
+    }
+
+    private static boolean isActive(IndexingJobState state) {
+        return state == IndexingJobState.RUNNING
+                || state == IndexingJobState.PAUSING
+                || state == IndexingJobState.PAUSED;
     }
 
     private static ScanJobMetrics metrics(DiscoveryProgress progress, long indexedEntries) {

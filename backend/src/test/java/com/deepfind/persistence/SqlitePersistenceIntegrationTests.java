@@ -123,6 +123,33 @@ class SqlitePersistenceIntegrationTests {
         assertThat(restarted.findRecent(20)).containsExactly(recovered);
     }
 
+    @Test
+    void persistsPausedJobsWithoutMisclassifyingThemAsCrashInterrupted() {
+        Path database = temporaryDirectory.resolve("paused.db");
+        DataSource dataSource = dataSource(database);
+        migrate(dataSource);
+        JdbcClient jdbc = JdbcClient.create(dataSource);
+        Path root = temporaryDirectory.resolve("paused-root").toAbsolutePath().normalize();
+        Instant startedAt = Instant.parse("2026-09-05T02:00:00Z");
+        catalog(jdbc).rememberSelected(root, startedAt);
+        UUID jobId = UUID.randomUUID();
+        SqliteScanHistoryRepository history = new SqliteScanHistoryRepository(jdbc);
+        history.start(jobId, root, startedAt);
+        ScanJobMetrics metrics = new ScanJobMetrics(10, 8, 2, 0, 0, 0, 0, 9);
+
+        history.requestPause(jobId, root.resolve("partial"), metrics);
+        history.markPaused(
+                jobId, root.resolve("partial"), metrics, "Indexing was paused safely.", startedAt.plusSeconds(5));
+
+        assertThat(history.interruptRunningJobs(startedAt.plusSeconds(10), "crash recovery"))
+                .isEmpty();
+        assertThat(history.findRecent(1)).singleElement().satisfies(record -> {
+            assertThat(record.state()).isEqualTo(ScanJobState.PAUSED);
+            assertThat(record.metrics()).isEqualTo(metrics);
+            assertThat(record.errorMessage()).contains("paused safely");
+        });
+    }
+
     private static PersistentRootCatalog catalog(JdbcClient jdbc) {
         return new PersistentRootCatalog(
                 new SqliteIndexedRootRepository(jdbc), new SqliteApplicationSettingsRepository(jdbc));

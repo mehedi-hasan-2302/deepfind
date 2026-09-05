@@ -54,7 +54,7 @@ public class SqliteScanHistoryRepository implements ScanHistoryRepository {
         int updated = jdbc.sql("""
                         UPDATE scan_jobs
                         SET state = 'INTERRUPTED', finished_at = :interruptedAt, error_message = :message
-                        WHERE state = 'RUNNING'
+                        WHERE state IN ('RUNNING', 'PAUSING')
                         """)
                 .param("interruptedAt", interruptedAt.toString())
                 .param("message", message)
@@ -85,7 +85,23 @@ public class SqliteScanHistoryRepository implements ScanHistoryRepository {
 
     @Override
     public void checkpoint(UUID jobId, Path currentPath, ScanJobMetrics metrics) {
-        updateMetrics("RUNNING", jobId, currentPath, metrics, null, null);
+        updateMetrics("RUNNING", "RUNNING", jobId, currentPath, metrics, null, null);
+    }
+
+    @Override
+    public void requestPause(UUID jobId, Path currentPath, ScanJobMetrics metrics) {
+        int updated = updateMetrics("PAUSING", "RUNNING", jobId, currentPath, metrics, null, null);
+        if (updated != 1) {
+            throw new PersistenceAccessException("DeepFind could not find the running scan job to pause.");
+        }
+    }
+
+    @Override
+    public void markPaused(UUID jobId, Path currentPath, ScanJobMetrics metrics, String message, Instant pausedAt) {
+        int updated = updateMetrics("PAUSED", "PAUSING", jobId, currentPath, metrics, message, pausedAt);
+        if (updated != 1) {
+            throw new PersistenceAccessException("DeepFind could not finalize the paused scan job.");
+        }
     }
 
     @Override
@@ -108,7 +124,10 @@ public class SqliteScanHistoryRepository implements ScanHistoryRepository {
         if (state != ScanJobState.COMPLETED && state != ScanJobState.FAILED) {
             throw new IllegalArgumentException("A finished scan must be completed or failed.");
         }
-        int updated = updateMetrics(state.name(), jobId, null, metrics, errorMessage, finishedAt);
+        int updated = updateMetrics(state.name(), "RUNNING", jobId, null, metrics, errorMessage, finishedAt);
+        if (updated == 0) {
+            updated = updateMetrics(state.name(), "PAUSING", jobId, null, metrics, errorMessage, finishedAt);
+        }
         if (updated != 1) {
             throw new PersistenceAccessException("DeepFind could not find the running scan job to finish.");
         }
@@ -128,6 +147,7 @@ public class SqliteScanHistoryRepository implements ScanHistoryRepository {
 
     private int updateMetrics(
             String state,
+            String expectedState,
             UUID jobId,
             Path currentPath,
             ScanJobMetrics metrics,
@@ -147,9 +167,10 @@ public class SqliteScanHistoryRepository implements ScanHistoryRepository {
                             entries_indexed = :entriesIndexed,
                             error_message = :errorMessage,
                             finished_at = :finishedAt
-                        WHERE job_id = :jobId AND state = 'RUNNING'
+                        WHERE job_id = :jobId AND state = :expectedState
                         """)
                 .param("state", state)
+                .param("expectedState", expectedState)
                 .param("currentPath", currentPath == null ? null : currentPath.toString())
                 .param("entriesDiscovered", metrics.entriesDiscovered())
                 .param("filesDiscovered", metrics.filesDiscovered())

@@ -45,6 +45,18 @@ public class IndexController {
         return IndexStatusResponse.from(jobs.reconcileSelectedRoot());
     }
 
+    @PostMapping("/pause")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public IndexStatusResponse pause() {
+        return IndexStatusResponse.from(jobs.pause());
+    }
+
+    @PostMapping("/resume")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public IndexStatusResponse resume() {
+        return IndexStatusResponse.from(jobs.resume());
+    }
+
     @GetMapping("/watch-status")
     public IndexWatchStatusResponse watchStatus() {
         return IndexWatchStatusResponse.from(watches.status());

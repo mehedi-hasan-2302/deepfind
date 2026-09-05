@@ -103,6 +103,46 @@ public record IndexingJobStatus(
                 finishedAt);
     }
 
+    IndexingJobStatus pausing() {
+        return new IndexingJobStatus(
+                jobId,
+                IndexingJobState.PAUSING,
+                root,
+                currentPath,
+                entriesDiscovered,
+                filesDiscovered,
+                directoriesDiscovered,
+                symbolicLinksDiscovered,
+                otherEntriesDiscovered,
+                entriesSkipped,
+                failures,
+                entriesIndexed,
+                lastFailure,
+                null,
+                startedAt,
+                null);
+    }
+
+    IndexingJobStatus paused(String message, Instant pausedAt) {
+        return new IndexingJobStatus(
+                jobId,
+                IndexingJobState.PAUSED,
+                root,
+                currentPath,
+                entriesDiscovered,
+                filesDiscovered,
+                directoriesDiscovered,
+                symbolicLinksDiscovered,
+                otherEntriesDiscovered,
+                entriesSkipped,
+                failures,
+                entriesIndexed,
+                lastFailure,
+                message,
+                startedAt,
+                pausedAt);
+    }
+
     IndexingJobStatus completed(MetadataIndexingOutcome outcome, Instant completedAt) {
         var discovery = outcome.discovery();
         return new IndexingJobStatus(

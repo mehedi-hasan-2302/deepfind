@@ -179,6 +179,14 @@ class DeepFindApiIntegrationTests {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
+        mockMvc.perform(post("/api/index/pause"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INDEX_JOB_STATE_CONFLICT"));
+
+        mockMvc.perform(post("/api/index/resume"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("INDEX_JOB_STATE_CONFLICT"));
+
         mockMvc.perform(get("/api/search")
                         .param("query", "invoice")
                         .param("minSizeBytes", "100")

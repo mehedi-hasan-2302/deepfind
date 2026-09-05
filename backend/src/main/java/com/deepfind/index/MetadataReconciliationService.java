@@ -47,42 +47,51 @@ public final class MetadataReconciliationService {
         AtomicLong changed = new AtomicLong();
         AtomicReference<RuntimeException> extractionFailure = new AtomicReference<>();
         ThreadPoolExecutor workers = extractionWorkers();
-        DiscoverySummary summary;
+        DiscoverySummary summary = null;
+        IndexingPausedException paused = null;
         try (MetadataIndexSnapshot snapshot = index.openMetadataSnapshot()) {
-            summary = discoveryService.discover(root, exclusions, new DiscoveryObserver() {
-                @Override
-                public void onEntry(FileMetadata metadata) {
-                    boolean unchanged = snapshot.find(metadata.absolutePath())
-                            .filter(existing -> sameFilesystemState(existing.metadata(), metadata))
-                            .filter(existing ->
-                                    metadata.kind() != FileSystemEntryKind.FILE || existing.contentAttempted())
-                            .isPresent();
-                    if (!unchanged) {
-                        index.upsert(metadata);
-                        changed.incrementAndGet();
-                        if (metadata.kind() == FileSystemEntryKind.FILE) {
-                            workers.execute(() -> extractAndUpdate(metadata, extractionFailure));
+            try {
+                summary = discoveryService.discover(root, exclusions, new DiscoveryObserver() {
+                    @Override
+                    public void onEntry(FileMetadata metadata) {
+                        boolean unchanged = snapshot.find(metadata.absolutePath())
+                                .filter(existing -> sameFilesystemState(existing.metadata(), metadata))
+                                .filter(existing ->
+                                        metadata.kind() != FileSystemEntryKind.FILE || existing.contentAttempted())
+                                .isPresent();
+                        if (!unchanged) {
+                            index.upsert(metadata);
+                            changed.incrementAndGet();
+                            if (metadata.kind() == FileSystemEntryKind.FILE) {
+                                workers.execute(() -> extractAndUpdate(metadata, extractionFailure));
+                            }
                         }
+                        observer.onEntry(metadata);
                     }
-                    observer.onEntry(metadata);
-                }
 
-                @Override
-                public void onFailure(DiscoveryFailure failure) {
-                    observer.onFailure(failure);
-                }
+                    @Override
+                    public void onFailure(DiscoveryFailure failure) {
+                        observer.onFailure(failure);
+                    }
 
-                @Override
-                public void onProgress(DiscoveryProgress progress) {
-                    observer.onProgress(progress);
-                }
-            });
+                    @Override
+                    public void onProgress(DiscoveryProgress progress) {
+                        observer.onProgress(progress);
+                    }
+                });
+            } catch (IndexingPausedException exception) {
+                paused = exception;
+            }
         } finally {
             finishExtraction(workers);
         }
         RuntimeException failure = extractionFailure.get();
         if (failure != null) {
             throw failure;
+        }
+        if (paused != null) {
+            index.commit();
+            throw paused;
         }
         long removed = index.deleteProvenMissingUnderRoot(root, exclusions);
         index.commit();

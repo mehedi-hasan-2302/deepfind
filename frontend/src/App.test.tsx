@@ -113,6 +113,73 @@ describe('App', () => {
     }))
   })
 
+  it('pauses at a safe boundary and resumes through reconciliation', async () => {
+    const runningStatus: IndexStatus = {
+      ...idleStatus,
+      jobId: 'job-pause',
+      state: 'RUNNING',
+      root: 'C:\\Docs',
+      currentPath: 'C:\\Docs\\drafts',
+      entriesDiscovered: 12,
+      entriesIndexed: 10,
+      startedAt: '2026-09-05T12:00:00Z',
+    }
+    const pausingStatus: IndexStatus = { ...runningStatus, state: 'PAUSING' }
+    const pausedStatus: IndexStatus = {
+      ...runningStatus,
+      state: 'PAUSED',
+      errorMessage: 'Indexing was paused safely. Resume to reconcile the folder from its current filesystem state.',
+      finishedAt: '2026-09-05T12:00:01Z',
+    }
+    const resumedStatus: IndexStatus = {
+      ...runningStatus,
+      jobId: 'job-resume',
+      state: 'RUNNING',
+      currentPath: 'C:\\Docs',
+      entriesDiscovered: 0,
+      entriesIndexed: 0,
+      startedAt: '2026-09-05T12:00:02Z',
+    }
+    const completedStatus: IndexStatus = {
+      ...resumedStatus,
+      state: 'COMPLETED',
+      entriesDiscovered: 42,
+      entriesIndexed: 42,
+      finishedAt: '2026-09-05T12:00:03Z',
+    }
+    let phase: 'running' | 'pausing' | 'resumed' = 'running'
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString()
+      if (url === '/api/index/status') {
+        if (phase === 'pausing') return jsonResponse(pausedStatus)
+        if (phase === 'resumed') return jsonResponse(completedStatus)
+        return jsonResponse(runningStatus)
+      }
+      if (url === '/api/index/pause' && init?.method === 'POST') {
+        phase = 'pausing'
+        return jsonResponse(pausingStatus, 202)
+      }
+      if (url === '/api/index/resume' && init?.method === 'POST') {
+        phase = 'resumed'
+        return jsonResponse(resumedStatus, 202)
+      }
+      return jsonResponse({}, 404)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    const pauseButton = await screen.findByRole('button', { name: 'Pause indexing' })
+    fireEvent.click(pauseButton)
+    expect(await screen.findByText('Paused', {}, { timeout: 2_000 })).toBeInTheDocument()
+    expect(screen.getByText(/resume to reconcile the folder/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resume indexing' }))
+    expect(await screen.findByText(/42 entries are ready to search/i, {}, { timeout: 2_000 })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith('/api/index/pause', { method: 'POST' })
+    expect(fetchMock).toHaveBeenCalledWith('/api/index/resume', { method: 'POST' })
+  })
+
   it('shows live freshness and manually refreshes the selected folder', async () => {
     const readyStatus: IndexStatus = {
       ...idleStatus,

@@ -6,7 +6,7 @@ Phase 6 — Indexing UX (in progress)
 
 ## Last completed step
 
-STEP 21 — Establish a deterministic search-quality evaluation baseline.
+STEP 22 — Add durable safe-stop indexing pause/resume.
 
 ## Completed
 
@@ -103,10 +103,16 @@ STEP 21 — Establish a deterministic search-quality evaluation baseline.
 - Evidence-first ranking policy documented so future boost changes begin with a representative failing case rather than raw-score guesswork.
 - Existing production ranking weights retained because every common-query and tier-order expectation passed unchanged.
 - Phase 5 exit criteria met: common lexical searches now have executable intuitive-order coverage alongside phrase, filter, fuzzy, highlighting, debounce, and pagination regressions.
+- Flyway schema version 5 with durable `PAUSING` and `PAUSED` scan states while preserving existing jobs and categorized failures.
+- Safe-boundary pause signaling that stops discovery, drains bounded in-flight extraction, commits completed Lucene work, and resumes native filesystem watching.
+- Honest resume semantics that validate the selected root and schedule a new changed-only reconciliation job instead of claiming an obsolete path is a durable cursor.
+- Single-job exclusion across running, pausing, and paused ownership, with startup recovery distinguishing deliberately paused work from crashes during running/pausing.
+- Loopback pause/resume endpoints, stable invalid-transition conflicts, responsive frontend controls, continued pausing-state polling, and clear recovery wording.
+- Lifecycle, migration, persistence, API-error, HTTP-route, and React pause/resume regressions.
 
 ## Current behavior
 
-The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Ordinary multi-term searches require all terms; balanced double quotes request positional phrase matching and malformed quotes fall back safely. A single eligible plain term with no ordinary results gets a bounded filename-only spelling retry labeled **Similar filename**; successful primary, short, multi-word, and quoted searches are never fuzzed. Filename phrase results retain priority and content phrase results are explained explicitly. Search results can be narrowed by entry type, extension, recent modification, and file size without changing relevance order, and broad result sets can be appended in bounded 50-result pages. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned. The persisted selected root is watched automatically, and ordinary create, content edit, rename, and delete events update search results. Metadata-aware reconciliation runs after startup and periodically, or promptly after explicit watcher uncertainty, without re-extracting unchanged content. The interface displays live-update health and can request immediate refresh of the persisted root. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Reconciliation provides eventual rather than atomic filesystem consistency.
+The user can index a local folder, safely pause after bounded in-flight work, and resume through changed-only reconciliation. Completed partial work is committed, deliberate pause state survives restart, and abandoned running/pausing work remains classified as interrupted. The user can search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Ordinary multi-term searches require all terms; balanced double quotes request positional phrase matching and malformed quotes fall back safely. A single eligible plain term with no ordinary results gets a bounded filename-only spelling retry labeled **Similar filename**; successful primary, short, multi-word, and quoted searches are never fuzzed. Filename phrase results retain priority and content phrase results are explained explicitly. Search results can be narrowed by entry type, extension, recent modification, and file size without changing relevance order, and broad result sets can be appended in bounded 50-result pages. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. The persisted selected root is watched automatically, and ordinary create, content edit, rename, and delete events update search results. Metadata-aware reconciliation runs after startup and periodically, or promptly after explicit watcher uncertainty, without re-extracting unchanged content. The interface displays live-update health and can request immediate refresh of the persisted root. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Reconciliation provides eventual rather than atomic filesystem consistency.
 
 ## Commands verified
 
@@ -147,6 +153,8 @@ The user can index a local folder and search filenames, paths, and text inside s
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 20 — passed; 83 tests, pagination window/HTTP validation regressions, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `npm run check` in `frontend` after STEP 20 — passed; ESLint, 12 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 21 — passed; 85 tests, deterministic common-query and relevance-tier evaluation, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
+- `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 22 — passed; 88 tests, pause/resume lifecycle and schema-v5 persistence coverage, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
+- `npm run check` in `frontend` after STEP 22 — passed; ESLint, 13 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 
 ## Known failures
 
@@ -154,7 +162,7 @@ No product failures recorded. Maven is not installed globally, so all backend co
 
 ## Next recommended step
 
-Add honest pause/resume controls for indexing jobs, defining safe checkpoint semantics without claiming exact filesystem-cursor continuation.
+Add persisted exclusion controls so non-technical users can omit selected subfolders without editing backend configuration, then reconcile the index safely when exclusions change.
 
 ## Important architectural notes
 
@@ -177,6 +185,7 @@ Add honest pause/resume controls for indexing jobs, defining safe checkpoint sem
 - Explicit filter parameters, validation, non-scoring Lucene composition, and frontend presets are defined by ADR 0020.
 - Zero-result-only fuzzy filename eligibility, edit-distance/expansion bounds, filter preservation, and result explanation are defined by ADR 0021.
 - Bounded offset windows, one-hit continuation detection, exact/lower-bound totals, frontend batching, and live-index consistency tradeoffs are defined by ADR 0022.
+- Durable pausing/paused states, safe-stop commit behavior, watcher restoration, and reconciliation-based resume are defined by ADR 0023.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
 - Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
 - The desktop shell remains deferred until its owning phase.

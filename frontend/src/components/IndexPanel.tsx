@@ -9,10 +9,15 @@ interface IndexPanelProps {
   onRootChange: (root: string) => void
   onStart: () => Promise<void>
   onRefresh: () => Promise<void>
+  onPause: () => Promise<void>
+  onResume: () => Promise<void>
 }
 
-export function IndexPanel({ root, status, watchStatus, error, onRootChange, onStart, onRefresh }: IndexPanelProps) {
+export function IndexPanel({ root, status, watchStatus, error, onRootChange, onStart, onRefresh, onPause, onResume }: IndexPanelProps) {
   const isRunning = status?.state === 'RUNNING'
+  const isPausing = status?.state === 'PAUSING'
+  const isPaused = status?.state === 'PAUSED'
+  const hasActiveJob = isRunning || isPausing || isPaused
   const canRefresh = Boolean(status?.root) && root.trim() === status?.root
 
   function submit(event: FormEvent) {
@@ -41,15 +46,25 @@ export function IndexPanel({ root, status, watchStatus, error, onRootChange, onS
             onChange={(event) => onRootChange(event.target.value)}
             placeholder="C:\Users\You\Documents"
             autoComplete="off"
-            disabled={isRunning}
+            disabled={hasActiveJob}
           />
           <div className="index-actions">
-            <button type="submit" disabled={isRunning || root.trim().length === 0}>
-              {isRunning ? 'Indexing…' : 'Start indexing'}
+            <button type="submit" disabled={hasActiveJob || root.trim().length === 0}>
+              {isRunning || isPausing ? 'Indexing…' : isPaused ? 'Indexing paused' : 'Start indexing'}
             </button>
-            <button type="button" className="secondary-button" disabled={isRunning || !canRefresh} onClick={() => void onRefresh()}>
+            <button type="button" className="secondary-button" disabled={hasActiveJob || !canRefresh} onClick={() => void onRefresh()}>
               Refresh index
             </button>
+            {isRunning || isPausing ? (
+              <button type="button" className="secondary-button" disabled={isPausing} onClick={() => void onPause()}>
+                {isPausing ? 'Pausing…' : 'Pause indexing'}
+              </button>
+            ) : null}
+            {isPaused ? (
+              <button type="button" onClick={() => void onResume()}>
+                Resume indexing
+              </button>
+            ) : null}
           </div>
         </div>
         <p className="field-help">Enter a full folder path. A native folder picker will arrive with desktop packaging.</p>
@@ -58,7 +73,7 @@ export function IndexPanel({ root, status, watchStatus, error, onRootChange, onS
       {error ? <p className="message error-message" role="alert">{error}</p> : null}
 
       <div className="index-status" aria-live="polite">
-        {isRunning ? <progress aria-label="Indexing files" /> : null}
+        {isRunning || isPausing ? <progress aria-label="Indexing files" /> : null}
         <p className="status-summary">{statusSummary(status)}</p>
         {status?.currentPath ? <p className="current-path" title={status.currentPath}>{status.currentPath}</p> : null}
         {status && status.state !== 'IDLE' ? (
@@ -79,8 +94,8 @@ export function IndexPanel({ root, status, watchStatus, error, onRootChange, onS
       <div className={`watch-status watch-${watchStatus?.state.toLowerCase() ?? 'unknown'}`} aria-live="polite">
         <span className="watch-indicator" aria-hidden="true" />
         <div>
-          <strong>{watchStatusLabel(watchStatus, isRunning)}</strong>
-          <p>{watchStatusSummary(watchStatus, isRunning)}</p>
+          <strong>{watchStatusLabel(watchStatus, isRunning || isPausing)}</strong>
+          <p>{watchStatusSummary(watchStatus, isRunning || isPausing)}</p>
         </div>
       </div>
     </aside>
@@ -117,6 +132,8 @@ function statusLabel(status: IndexStatus | null) {
   return {
     IDLE: 'Not started',
     RUNNING: 'Indexing',
+    PAUSING: 'Pausing',
+    PAUSED: 'Paused',
     COMPLETED: 'Ready',
     FAILED: 'Needs attention',
     INTERRUPTED: 'Interrupted',
@@ -127,6 +144,8 @@ function statusSummary(status: IndexStatus | null) {
   if (!status) return 'Connecting to the local search service…'
   if (status.state === 'IDLE') return 'Choose a folder to make its filenames and paths searchable.'
   if (status.state === 'RUNNING') return 'Indexing is in progress. Search results may still be incomplete.'
+  if (status.state === 'PAUSING') return 'Finishing the current safe work boundary before pausing.'
+  if (status.state === 'PAUSED') return status.errorMessage ?? 'Indexing is paused.'
   if (status.state === 'FAILED' || status.state === 'INTERRUPTED') {
     return status.errorMessage ?? 'Indexing stopped before it could finish.'
   }

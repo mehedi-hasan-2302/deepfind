@@ -1,4 +1,4 @@
-export type IndexJobState = 'IDLE' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'INTERRUPTED'
+export type IndexJobState = 'IDLE' | 'RUNNING' | 'PAUSING' | 'PAUSED' | 'COMPLETED' | 'FAILED' | 'INTERRUPTED'
 
 export interface IndexFailure {
   path: string
@@ -107,6 +107,14 @@ export async function startIndex(root: string): Promise<IndexStatus> {
 
 export async function refreshIndex(): Promise<IndexStatus> {
   return requestJson<IndexStatus>('/api/index/refresh', { method: 'POST' })
+}
+
+export async function pauseIndex(): Promise<IndexStatus> {
+  return requestJson<IndexStatus>('/api/index/pause', { method: 'POST' })
+}
+
+export async function resumeIndex(): Promise<IndexStatus> {
+  return requestJson<IndexStatus>('/api/index/resume', { method: 'POST' })
 }
 
 export async function getIndexWatchStatus(signal?: AbortSignal): Promise<IndexWatchStatus> {

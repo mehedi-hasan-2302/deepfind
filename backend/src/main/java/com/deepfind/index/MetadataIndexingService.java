@@ -49,7 +49,8 @@ public final class MetadataIndexingService {
         AtomicLong indexed = new AtomicLong();
         AtomicReference<RuntimeException> extractionFailure = new AtomicReference<>();
         ThreadPoolExecutor extractionWorkers = extractionWorkers();
-        DiscoverySummary summary;
+        DiscoverySummary summary = null;
+        IndexingPausedException paused = null;
         try {
             summary = discoveryService.discover(root, exclusions, new DiscoveryObserver() {
                 @Override
@@ -72,12 +73,18 @@ public final class MetadataIndexingService {
                     observer.onProgress(progress);
                 }
             });
+        } catch (IndexingPausedException exception) {
+            paused = exception;
         } finally {
             finishExtraction(extractionWorkers);
         }
         RuntimeException failure = extractionFailure.get();
         if (failure != null) {
             throw failure;
+        }
+        if (paused != null) {
+            index.commit();
+            throw paused;
         }
         index.commit();
         return new MetadataIndexingOutcome(summary, indexed.get());

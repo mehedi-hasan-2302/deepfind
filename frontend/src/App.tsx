@@ -3,7 +3,9 @@ import {
   DeepFindApiError,
   getIndexWatchStatus,
   getIndexStatus,
+  pauseIndex,
   refreshIndex,
+  resumeIndex,
   searchFiles,
   startIndex,
   type IndexStatus,
@@ -68,7 +70,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (indexStatus?.state !== 'RUNNING') return
+    if (indexStatus?.state !== 'RUNNING' && indexStatus?.state !== 'PAUSING') return
     let active = true
     let timer = 0
 
@@ -78,7 +80,7 @@ function App() {
         if (!active) return
         setIndexStatus(status)
         setIndexError(null)
-        if (status.state === 'RUNNING') timer = window.setTimeout(poll, STATUS_POLL_MS)
+        if (status.state === 'RUNNING' || status.state === 'PAUSING') timer = window.setTimeout(poll, STATUS_POLL_MS)
       } catch (error) {
         if (active) setIndexError(errorMessage(error))
       }
@@ -184,6 +186,24 @@ function App() {
     }
   }
 
+  async function pauseIndexing() {
+    setIndexError(null)
+    try {
+      setIndexStatus(await pauseIndex())
+    } catch (error) {
+      setIndexError(errorMessage(error))
+    }
+  }
+
+  async function resumeIndexing() {
+    setIndexError(null)
+    try {
+      setIndexStatus(await resumeIndex())
+    } catch (error) {
+      setIndexError(errorMessage(error))
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -212,6 +232,8 @@ function App() {
           onRootChange={setRoot}
           onStart={beginIndexing}
           onRefresh={refreshSelectedRoot}
+          onPause={pauseIndexing}
+          onResume={resumeIndexing}
         />
         <SearchPanel
           query={query}
