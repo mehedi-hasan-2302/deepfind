@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 5 — Search Quality (in progress)
+Phase 6 — Indexing UX (in progress)
 
 ## Last completed step
 
-STEP 20 — Add bounded search pagination.
+STEP 21 — Establish a deterministic search-quality evaluation baseline.
 
 ## Completed
 
@@ -98,6 +98,11 @@ STEP 20 — Add bounded search pagination.
 - Explicit `totalHitsExact` reporting and a readable `+` suffix when Lucene returns a safe lower bound.
 - Cancellable frontend **Load more** requests in batches of 50 that preserve the active query and filters, append results, disable duplicate requests, and disappear at the final page.
 - Lucene, HTTP validation/serialization, URL, append-preservation, and final-page pagination regressions.
+- Deterministic eight-document local evaluation corpus covering the master-plan queries `refund`, `AWS cancellation`, `salary expectation`, `invoice`, and `resume`.
+- Explicit top-result expectations plus a full invoice relevance-tier regression: filename prefix → filename token → folder path → document content.
+- Evidence-first ranking policy documented so future boost changes begin with a representative failing case rather than raw-score guesswork.
+- Existing production ranking weights retained because every common-query and tier-order expectation passed unchanged.
+- Phase 5 exit criteria met: common lexical searches now have executable intuitive-order coverage alongside phrase, filter, fuzzy, highlighting, debounce, and pagination regressions.
 
 ## Current behavior
 
@@ -141,6 +146,7 @@ The user can index a local folder and search filenames, paths, and text inside s
 - `npm run check` in `frontend` after STEP 19 — passed; ESLint, 11 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 20 — passed; 83 tests, pagination window/HTTP validation regressions, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `npm run check` in `frontend` after STEP 20 — passed; ESLint, 12 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
+- `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 21 — passed; 85 tests, deterministic common-query and relevance-tier evaluation, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 
 ## Known failures
 
@@ -148,7 +154,7 @@ No product failures recorded. Maven is not installed globally, so all backend co
 
 ## Next recommended step
 
-Create a small deterministic search-quality evaluation corpus and expected-query suite, then tune ranking only where measured regressions show a need.
+Add honest pause/resume controls for indexing jobs, defining safe checkpoint semantics without claiming exact filesystem-cursor continuation.
 
 ## Important architectural notes
 

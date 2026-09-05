@@ -2,7 +2,7 @@
 
 ## Status
 
-Phases 1–4 provide an end-to-end local search slice with durable index, root configuration, scan history, interrupted-run detection, automatic selected-root watching, bounded incremental Lucene updates, scheduled reconciliation, manual refresh, and visible freshness health. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, guarded platform file actions, event application, watcher lifecycle coordination, and automatic repair are implemented. Search-quality expansion, indexing UX, hardening, and desktop packaging remain.
+Phases 1–5 provide an end-to-end local search slice with durable index, root configuration, scan history, interrupted-run detection, automatic selected-root watching, bounded incremental Lucene updates, scheduled reconciliation, manual refresh, visible freshness health, phrase search, explicit filters, bounded fuzzy fallback, highlighting, and pagination. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, a loopback API, a React interface, guarded platform file actions, event application, watcher lifecycle coordination, automatic repair, and a deterministic search-quality evaluation corpus are implemented. Indexing UX, hardening, desktop packaging, performance validation, and beta readiness remain.
 
 ## Components
 

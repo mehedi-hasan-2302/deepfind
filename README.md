@@ -84,6 +84,7 @@ Search responses are paged. The API accepts an `offset` from 0 through 10,000 an
 
 - [Product requirements](docs/PRODUCT.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Search quality evaluation](docs/SEARCH_QUALITY.md)
 - [Privacy](docs/PRIVACY.md)
 - [Progress and handoff](docs/PROGRESS.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
