@@ -13,9 +13,11 @@ interface SearchPanelProps {
   query: string
   response: SearchResponse | null
   loading: boolean
+  loadingMore: boolean
   error: string | null
   onQueryChange: (query: string) => void
   onFiltersChange: (filters: SearchFilters) => void
+  onLoadMore: () => void
 }
 
 type FilterChoices = {
@@ -28,7 +30,7 @@ type FilterChoices = {
 const EMPTY_FILTERS: FilterChoices = { kind: '', extension: '', modifiedDays: '', sizeRange: '' }
 const MEBIBYTE = 1024 ** 2
 
-export function SearchPanel({ query, response, loading, error, onQueryChange, onFiltersChange }: SearchPanelProps) {
+export function SearchPanel({ query, response, loading, loadingMore, error, onQueryChange, onFiltersChange, onLoadMore }: SearchPanelProps) {
   const hasQuery = query.trim().length > 0
   const [filters, setFilters] = useState<FilterChoices>(EMPTY_FILTERS)
 
@@ -46,7 +48,7 @@ export function SearchPanel({ query, response, loading, error, onQueryChange, on
         </div>
         {response ? (
           <p className="result-timing">
-            {response.totalHits.toLocaleString()} {response.totalHits === 1 ? 'result' : 'results'} · {response.tookMs} ms
+            {response.totalHits.toLocaleString()}{response.totalHitsExact === false ? '+' : ''} {response.totalHits === 1 ? 'result' : 'results'} · {response.tookMs} ms
           </p>
         ) : null}
       </div>
@@ -128,9 +130,19 @@ export function SearchPanel({ query, response, loading, error, onQueryChange, on
       ) : null}
 
       {response && response.results.length > 0 ? (
-        <ol className="results-list" aria-label="Search results">
-          {response.results.map((result) => <ResultCard key={result.path} result={result} />)}
-        </ol>
+        <>
+          <ol className="results-list" aria-label="Search results">
+            {response.results.map((result) => <ResultCard key={result.path} result={result} />)}
+          </ol>
+          {response.hasMore ? (
+            <div className="pagination-controls">
+              <span>Showing {response.results.length.toLocaleString()} results</span>
+              <button type="button" onClick={onLoadMore} disabled={loadingMore}>
+                {loadingMore ? 'Loading more…' : 'Load more'}
+              </button>
+            </div>
+          ) : null}
+        </>
       ) : null}
     </section>
   )

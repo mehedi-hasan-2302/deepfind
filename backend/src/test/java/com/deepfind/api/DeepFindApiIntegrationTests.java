@@ -94,6 +94,10 @@ class DeepFindApiIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.query").value("thesis final"))
                 .andExpect(jsonPath("$.totalHits").value(1))
+                .andExpect(jsonPath("$.totalHitsExact").value(true))
+                .andExpect(jsonPath("$.offset").value(0))
+                .andExpect(jsonPath("$.limit").value(10))
+                .andExpect(jsonPath("$.hasMore").value(false))
                 .andExpect(jsonPath("$.results[0].path")
                         .value(expectedFile.toAbsolutePath().normalize().toString()))
                 .andExpect(jsonPath("$.results[0].filename").value("final_submission.docx"))
@@ -115,6 +119,18 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.results[0].filename").value("final_submission.docx"))
                 .andExpect(jsonPath("$.results[0].matchType").value("FUZZY_FILENAME"))
                 .andExpect(jsonPath("$.results[0].snippet").isEmpty());
+
+        mockMvc.perform(get("/api/search")
+                        .param("query", "archive")
+                        .param("offset", "1")
+                        .param("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalHits").value(5))
+                .andExpect(jsonPath("$.totalHitsExact").value(true))
+                .andExpect(jsonPath("$.offset").value(1))
+                .andExpect(jsonPath("$.limit").value(2))
+                .andExpect(jsonPath("$.hasMore").value(true))
+                .andExpect(jsonPath("$.results.length()").value(2));
 
         mockMvc.perform(get("/api/search").param("query", "starling").param("limit", "10"))
                 .andExpect(status().isOk())
@@ -156,6 +172,10 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
         mockMvc.perform(get("/api/search").param("query", "invoice").param("kind", "UNKNOWN"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(get("/api/search").param("query", "invoice").param("offset", "10001"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 

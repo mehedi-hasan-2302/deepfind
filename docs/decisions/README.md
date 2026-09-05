@@ -23,3 +23,4 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0019 — Add safe explicit phrase search](0019-safe-explicit-phrase-search.md)
 - [0020 — Keep search filters explicit and non-scoring](0020-explicit-non-scoring-search-filters.md)
 - [0021 — Bound fuzzy search to zero-result filenames](0021-bounded-zero-result-fuzzy-filenames.md)
+- [0022 — Use bounded offset windows for interactive pagination](0022-bounded-offset-search-pagination.md)

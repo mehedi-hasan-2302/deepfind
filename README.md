@@ -78,6 +78,8 @@ When an ordinary single word of 4–32 letters or digits has no exact filename, 
 
 The search interface can narrow results by entry type, extension, recent modification window, and file-size range. Filters are sent as separate validated API parameters rather than embedded in the query text, so they restrict candidates without changing relevance scores. The loopback API accepts optional `kind`, `extension`, `modifiedAfter`, `modifiedBefore`, `minSizeBytes`, and `maxSizeBytes` parameters on `GET /api/search`; date values are ISO-8601 instants and numeric ranges are inclusive bytes.
 
+Search responses are paged. The API accepts an `offset` from 0 through 10,000 and a `limit` from 1 through 1,000, and returns `offset`, `limit`, `hasMore`, and `totalHitsExact` alongside the results. The interface requests 50 results initially and appends the next page through **Load more**. A `+` after the displayed total means Lucene reported a safe lower bound rather than an exact count.
+
 ## Documentation
 
 - [Product requirements](docs/PRODUCT.md)

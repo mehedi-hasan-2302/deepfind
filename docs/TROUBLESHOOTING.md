@@ -26,6 +26,7 @@
 - Use balanced double quotes for an exact analyzed phrase, such as `"salary expectation"`. If a closing quote is missing, DeepFind intentionally searches the words as ordinary text rather than rejecting the request. Phrase search is lexical and does not yet add synonyms or semantic similarity.
 - **Similar filename** means the ordinary search returned no results and DeepFind retried one plain 4–32-character word against filename tokens only. This conservative fallback does not run for short, multi-word, quoted, path, or content similarity searches.
 - Entry type, extension, modified-time, and size filters combine with the text query. Use **Clear filters** when an expected result disappears. Extensions may be entered as `pdf` or `.pdf` and are matched case-insensitively. Size presets use binary units (1 MB = 1,048,576 bytes), and modified presets compare against the current browser time.
+- **Load more** appends the next 50 ranked results while preserving the active query and filters. Because the local index remains live, filesystem changes between page requests can shift offsets; starting a fresh search gives the newest coherent ordering. API offsets above 10,000 are intentionally rejected to bound Lucene collection work.
 
 ## Local database issues
 

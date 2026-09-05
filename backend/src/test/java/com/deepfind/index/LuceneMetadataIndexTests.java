@@ -297,12 +297,41 @@ class LuceneMetadataIndexTests {
     }
 
     @Test
+    void returnsBoundedDisjointResultPagesWithContinuationState() {
+        Path indexPath = temporaryDirectory.resolve("pagination-index");
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(indexPath)) {
+            for (int number = 0; number < 5; number++) {
+                index.upsert(metadata(temporaryDirectory.resolve("report-" + number + ".txt"), number));
+            }
+            index.commit();
+
+            var first = index.searchPage("report", 0, 2, MetadataSearchFilters.none());
+            var second = index.searchPage("report", 2, 2, MetadataSearchFilters.none());
+            var last = index.searchPage("report", 4, 2, MetadataSearchFilters.none());
+
+            assertThat(first.totalHits()).isEqualTo(5);
+            assertThat(first.totalHitsExact()).isTrue();
+            assertThat(first.offset()).isZero();
+            assertThat(first.limit()).isEqualTo(2);
+            assertThat(first.hasMore()).isTrue();
+            assertThat(first.results()).hasSize(2);
+            assertThat(second.results()).hasSize(2).doesNotContainAnyElementsOf(first.results());
+            assertThat(second.hasMore()).isTrue();
+            assertThat(last.results()).hasSize(1).doesNotContainAnyElementsOf(second.results());
+            assertThat(last.hasMore()).isFalse();
+        }
+    }
+
+    @Test
     void emptyQueriesAreSafeAndLimitsAreBounded() {
         try (LuceneMetadataIndex index = new LuceneMetadataIndex(temporaryDirectory.resolve("index"))) {
             assertThat(index.search("   ", 10)).isEmpty();
             assertThatThrownBy(() -> index.search("anything", 0))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("between 1 and 1000");
+            assertThatThrownBy(() -> index.searchPage("anything", 10_001, 10, MetadataSearchFilters.none()))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("between 0 and 10000");
         }
     }
 

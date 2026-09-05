@@ -198,7 +198,7 @@ describe('App', () => {
     expect(document.querySelector('.result-snippet img')).toBeNull()
     expect(screen.getByText(/2\.0 KB/)).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/search?query=salary+expectation&limit=50',
+      '/api/search?query=salary+expectation&offset=0&limit=50',
       expect.objectContaining({ signal: expect.anything() }),
     )
   })
@@ -289,13 +289,78 @@ describe('App', () => {
 
     expect(await screen.findByText('No results for “invoice”.')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/search?query=invoice&limit=50&kind=FILE&extension=pdf&minSizeBytes=1048576&maxSizeBytes=10485759',
+      '/api/search?query=invoice&offset=0&limit=50&kind=FILE&extension=pdf&minSizeBytes=1048576&maxSizeBytes=10485759',
       expect.objectContaining({ signal: expect.anything() }),
     )
 
     fireEvent.click(screen.getByRole('button', { name: /clear filters/i }))
     expect(screen.getByLabelText('Entry type')).toHaveValue('')
     expect(screen.getByLabelText('File extension')).toHaveValue('')
+  })
+
+  it('loads and appends later result pages without replacing earlier results', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString()
+      if (url === '/api/index/status') return jsonResponse(idleStatus)
+      if (url.includes('/api/search?query=report&offset=0')) {
+        return jsonResponse({
+          query: 'report',
+          tookMs: 2,
+          totalHits: 2,
+          totalHitsExact: true,
+          offset: 0,
+          limit: 50,
+          hasMore: true,
+          results: [{
+            path: 'D:\\Archive\\report-one.txt',
+            filename: 'report-one.txt',
+            extension: 'txt',
+            type: 'FILE',
+            sizeBytes: 100,
+            modifiedAt: '2026-09-01T10:30:00Z',
+            matchType: 'FILENAME_PREFIX',
+            snippet: null,
+          }],
+        })
+      }
+      if (url.includes('/api/search?query=report&offset=1')) {
+        return jsonResponse({
+          query: 'report',
+          tookMs: 1,
+          totalHits: 2,
+          totalHitsExact: true,
+          offset: 1,
+          limit: 50,
+          hasMore: false,
+          results: [{
+            path: 'D:\\Archive\\report-two.txt',
+            filename: 'report-two.txt',
+            extension: 'txt',
+            type: 'FILE',
+            sizeBytes: 200,
+            modifiedAt: '2026-09-01T10:30:00Z',
+            matchType: 'FILENAME_PREFIX',
+            snippet: null,
+          }],
+        })
+      }
+      return jsonResponse({}, 404)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'report' } })
+
+    expect(await screen.findByRole('heading', { name: 'report-one.txt' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }))
+
+    expect(await screen.findByRole('heading', { name: 'report-two.txt' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'report-one.txt' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/search?query=report&offset=1&limit=50',
+      expect.objectContaining({ signal: expect.anything() }),
+    )
   })
 
   it('opens, reveals, and copies paths from a result card', async () => {

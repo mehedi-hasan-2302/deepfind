@@ -58,6 +58,10 @@ export interface SearchResponse {
   query: string
   tookMs: number
   totalHits: number
+  totalHitsExact: boolean
+  offset: number
+  limit: number
+  hasMore: boolean
   results: SearchResult[]
 }
 
@@ -112,10 +116,11 @@ export async function getIndexWatchStatus(signal?: AbortSignal): Promise<IndexWa
 export async function searchFiles(
   query: string,
   limit = 50,
+  offset = 0,
   filters: SearchFilters = {},
   signal?: AbortSignal,
 ): Promise<SearchResponse> {
-  const parameters = new URLSearchParams({ query, limit: String(limit) })
+  const parameters = new URLSearchParams({ query, offset: String(offset), limit: String(limit) })
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== undefined && value !== '') parameters.set(key, String(value))
   })

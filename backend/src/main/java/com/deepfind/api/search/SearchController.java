@@ -30,6 +30,7 @@ public class SearchController {
     @GetMapping
     public SearchResponse search(
             @RequestParam @NotBlank @Size(max = 500) String query,
+            @RequestParam(defaultValue = "0") @PositiveOrZero @Max(10000) int offset,
             @RequestParam(defaultValue = "50") @Min(1) @Max(1000) int limit,
             @RequestParam(required = false) FileSystemEntryKind kind,
             @RequestParam(required = false) @Size(max = 32) @Pattern(regexp = "^\\.?[\\p{L}\\p{N}][\\p{L}\\p{N}+_-]*$") String extension,
@@ -39,6 +40,6 @@ public class SearchController {
             @RequestParam(required = false) @PositiveOrZero Long maxSizeBytes) {
         MetadataSearchFilters filters =
                 new MetadataSearchFilters(kind, extension, modifiedAfter, modifiedBefore, minSizeBytes, maxSizeBytes);
-        return SearchResponse.from(search.search(query, limit, filters));
+        return SearchResponse.from(search.search(query, offset, limit, filters));
     }
 }

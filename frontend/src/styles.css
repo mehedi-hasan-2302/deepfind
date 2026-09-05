@@ -501,6 +501,33 @@ button:disabled {
   list-style: none;
 }
 
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  color: #68766f;
+  font-size: 0.84rem;
+}
+
+.pagination-controls button {
+  min-width: 7.5rem;
+  border: 1px solid rgb(36 95 67 / 24%);
+  border-radius: 0.65rem;
+  padding: 0.65rem 1rem;
+  color: #245f43;
+  background: #eef6f1;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.pagination-controls button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .result-card {
   display: grid;
   grid-template-columns: 2.6rem minmax(0, 1fr);
@@ -669,5 +696,10 @@ button:disabled {
 
   .search-filters {
     grid-template-columns: 1fr;
+  }
+
+  .pagination-controls {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

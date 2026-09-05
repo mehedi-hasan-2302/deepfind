@@ -14,12 +14,16 @@ public class MetadataSearchService {
     }
 
     public TimedMetadataSearch search(String query, int limit) {
-        return search(query, limit, MetadataSearchFilters.none());
+        return search(query, 0, limit, MetadataSearchFilters.none());
     }
 
     public TimedMetadataSearch search(String query, int limit, MetadataSearchFilters filters) {
+        return search(query, 0, limit, filters);
+    }
+
+    public TimedMetadataSearch search(String query, int offset, int limit, MetadataSearchFilters filters) {
         long started = System.nanoTime();
-        MetadataSearchPage page = index.searchPage(query, limit, filters);
+        MetadataSearchPage page = index.searchPage(query, offset, limit, filters);
         long tookMs = Math.max(0, (System.nanoTime() - started) / 1_000_000);
         return new TimedMetadataSearch(query.trim(), tookMs, page);
     }

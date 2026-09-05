@@ -16,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -45,6 +46,7 @@ import org.apache.lucene.search.SearcherFactory;
 import org.apache.lucene.search.SearcherManager;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
+import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.IOUtils;
@@ -53,6 +55,7 @@ import org.apache.lucene.util.QueryBuilder;
 public final class LuceneMetadataIndex implements AutoCloseable {
 
     private static final int MAX_RESULT_LIMIT = 1_000;
+    private static final int MAX_RESULT_OFFSET = 10_000;
 
     private final Directory directory;
     private final Analyzer analyzer;
@@ -225,41 +228,56 @@ public final class LuceneMetadataIndex implements AutoCloseable {
     }
 
     public MetadataSearchPage searchPage(String queryText, int limit) {
-        return searchPage(queryText, limit, MetadataSearchFilters.none());
+        return searchPage(queryText, 0, limit, MetadataSearchFilters.none());
     }
 
     public MetadataSearchPage searchPage(String queryText, int limit, MetadataSearchFilters filters) {
+        return searchPage(queryText, 0, limit, filters);
+    }
+
+    public MetadataSearchPage searchPage(String queryText, int offset, int limit, MetadataSearchFilters filters) {
         ensureOpen();
         Objects.requireNonNull(filters, "filters must not be null");
         String query =
                 Objects.requireNonNull(queryText, "queryText must not be null").trim();
         if (query.isEmpty()) {
-            return new MetadataSearchPage(0, List.of());
+            return new MetadataSearchPage(0, true, offset, limit, false, List.of());
         }
         if (limit < 1 || limit > MAX_RESULT_LIMIT) {
             throw new IllegalArgumentException("limit must be between 1 and " + MAX_RESULT_LIMIT);
+        }
+        if (offset < 0 || offset > MAX_RESULT_OFFSET) {
+            throw new IllegalArgumentException("offset must be between 0 and " + MAX_RESULT_OFFSET);
         }
 
         try {
             ParsedSearchQuery parsedQuery = ParsedSearchQuery.parse(query);
             if (parsedQuery.literalText().isEmpty()) {
-                return new MetadataSearchPage(0, List.of());
+                return new MetadataSearchPage(0, true, offset, limit, false, List.of());
             }
             Query luceneQuery = applyFilters(buildQuery(parsedQuery), filters);
+            int requestedHits = offset + limit + 1;
             searcherManager.maybeRefreshBlocking();
             IndexSearcher searcher = searcherManager.acquire();
             try {
-                TopDocs hits = searcher.search(luceneQuery, limit);
+                TopDocs hits = searcher.search(luceneQuery, requestedHits);
                 boolean fuzzyFallback = false;
                 Optional<String> fuzzyTerm = parsedQuery.fuzzyFilenameTerm();
                 if (hits.scoreDocs.length == 0 && fuzzyTerm.isPresent()) {
                     Query fuzzyQuery = applyFilters(buildFuzzyFilenameQuery(fuzzyTerm.orElseThrow()), filters);
-                    hits = searcher.search(fuzzyQuery, limit);
+                    hits = searcher.search(fuzzyQuery, requestedHits);
                     fuzzyFallback = true;
                 }
+                int resultStart = Math.min(offset, hits.scoreDocs.length);
+                int resultEnd = Math.min(resultStart + limit, hits.scoreDocs.length);
+                ScoreDoc[] pageHits = Arrays.copyOfRange(hits.scoreDocs, resultStart, resultEnd);
                 return new MetadataSearchPage(
                         hits.totalHits == null ? hits.scoreDocs.length : hits.totalHits.value(),
-                        mapResults(searcher, hits.scoreDocs, query, parsedQuery, fuzzyFallback));
+                        hits.totalHits == null || hits.totalHits.relation() == TotalHits.Relation.EQUAL_TO,
+                        offset,
+                        limit,
+                        hits.scoreDocs.length > resultEnd,
+                        mapResults(searcher, pageHits, query, parsedQuery, fuzzyFallback));
             } finally {
                 searcherManager.release(searcher);
             }

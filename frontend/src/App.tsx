@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   DeepFindApiError,
   getIndexWatchStatus,
@@ -26,8 +26,10 @@ function App() {
   const [query, setQuery] = useState('')
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
+  const [paginationLoading, setPaginationLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [searchFilters, setSearchFilters] = useState<SearchFilters>({})
+  const paginationController = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -96,7 +98,7 @@ function App() {
     const timer = window.setTimeout(() => {
       setSearchLoading(true)
       setSearchError(null)
-      void searchFiles(normalizedQuery, 50, searchFilters, controller.signal)
+      void searchFiles(normalizedQuery, 50, 0, searchFilters, controller.signal)
         .then(setSearchResponse)
         .catch((error: unknown) => {
           if (!isAbort(error)) setSearchError(errorMessage(error))
@@ -113,10 +115,54 @@ function App() {
   }, [query, searchFilters])
 
   function changeQuery(nextQuery: string) {
+    cancelPagination()
     setQuery(nextQuery)
     setSearchResponse(null)
     setSearchError(null)
     if (!nextQuery.trim()) setSearchLoading(false)
+  }
+
+  function changeFilters(nextFilters: SearchFilters) {
+    cancelPagination()
+    setSearchFilters(nextFilters)
+  }
+
+  function cancelPagination() {
+    paginationController.current?.abort()
+    paginationController.current = null
+    setPaginationLoading(false)
+  }
+
+  async function loadMoreResults() {
+    const normalizedQuery = query.trim()
+    if (!normalizedQuery || !searchResponse?.hasMore || searchLoading || paginationLoading) return
+
+    const expectedOffset = searchResponse.results.length
+    const controller = new AbortController()
+    paginationController.current?.abort()
+    paginationController.current = controller
+    setPaginationLoading(true)
+    setSearchError(null)
+    try {
+      const nextPage = await searchFiles(normalizedQuery, 50, expectedOffset, searchFilters, controller.signal)
+      if (controller.signal.aborted) return
+      setSearchResponse((current) => {
+        if (!current || current.query !== nextPage.query || current.results.length !== expectedOffset) return current
+        return {
+          ...nextPage,
+          offset: 0,
+          limit: current.results.length + nextPage.results.length,
+          results: [...current.results, ...nextPage.results],
+        }
+      })
+    } catch (error) {
+      if (!isAbort(error)) setSearchError(errorMessage(error))
+    } finally {
+      if (paginationController.current === controller) {
+        paginationController.current = null
+        setPaginationLoading(false)
+      }
+    }
   }
 
   async function beginIndexing() {
@@ -171,9 +217,11 @@ function App() {
           query={query}
           response={searchResponse}
           loading={searchLoading}
+          loadingMore={paginationLoading}
           error={searchError}
           onQueryChange={changeQuery}
-          onFiltersChange={setSearchFilters}
+          onFiltersChange={changeFilters}
+          onLoadMore={loadMoreResults}
         />
       </div>
     </main>
