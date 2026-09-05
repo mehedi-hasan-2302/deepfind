@@ -238,6 +238,34 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'board-minutes.txt' })).toBeInTheDocument()
   })
 
+  it('sends explicit type, extension, and size filters without changing the query text', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString()
+      if (url === '/api/index/status') return jsonResponse(idleStatus)
+      if (url.startsWith('/api/search?')) {
+        return jsonResponse({ query: 'invoice', tookMs: 1, totalHits: 0, results: [] })
+      }
+      return jsonResponse({}, 404)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'invoice' } })
+    fireEvent.change(screen.getByLabelText('Entry type'), { target: { value: 'FILE' } })
+    fireEvent.change(screen.getByLabelText('File extension'), { target: { value: 'pdf' } })
+    fireEvent.change(screen.getByLabelText('Size'), { target: { value: 'ONE_TO_TEN_MB' } })
+
+    expect(await screen.findByText('No results for “invoice”.')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/search?query=invoice&limit=50&kind=FILE&extension=pdf&minSizeBytes=1048576&maxSizeBytes=10485759',
+      expect.objectContaining({ signal: expect.anything() }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /clear filters/i }))
+    expect(screen.getByLabelText('Entry type')).toHaveValue('')
+    expect(screen.getByLabelText('File extension')).toHaveValue('')
+  })
+
   it('opens, reveals, and copies paths from a result card', async () => {
     const resultPath = 'D:\\Archive\\Thesis\\final_submission.docx'
     const writeText = vi.fn(async () => undefined)

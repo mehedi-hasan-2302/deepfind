@@ -9,6 +9,7 @@ import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.FileSystemEntryKind;
 import com.deepfind.filesystem.PathNormalizer;
 import com.deepfind.search.MetadataMatchType;
+import com.deepfind.search.MetadataSearchFilters;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Map;
@@ -179,6 +180,72 @@ class LuceneMetadataIndexTests {
     }
 
     @Test
+    void filtersByKindExtensionModifiedTimeAndSizeWithoutChangingRanking() {
+        Path indexPath = temporaryDirectory.resolve("filter-index");
+        FileMetadata recentPdf = metadata(
+                temporaryDirectory.resolve("reports/invoice-current.pdf"),
+                5L * 1024 * 1024,
+                Instant.parse("2026-09-01T12:00:00Z"),
+                FileSystemEntryKind.FILE);
+        FileMetadata oldDocx = metadata(
+                temporaryDirectory.resolve("reports/invoice-archive.docx"),
+                20L * 1024 * 1024,
+                Instant.parse("2025-01-01T12:00:00Z"),
+                FileSystemEntryKind.FILE);
+        FileMetadata directory = metadata(
+                temporaryDirectory.resolve("invoice-folder"),
+                0,
+                Instant.parse("2026-09-02T12:00:00Z"),
+                FileSystemEntryKind.DIRECTORY);
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(indexPath)) {
+            index.upsert(recentPdf);
+            index.upsert(oldDocx);
+            index.upsert(directory);
+            index.commit();
+
+            assertThat(index.searchPage(
+                                    "invoice",
+                                    10,
+                                    new MetadataSearchFilters(FileSystemEntryKind.FILE, ".PDF", null, null, null, null))
+                            .results())
+                    .singleElement()
+                    .extracting(result -> result.metadata().filename())
+                    .isEqualTo("invoice-current.pdf");
+            assertThat(index.searchPage(
+                                    "invoice",
+                                    10,
+                                    new MetadataSearchFilters(
+                                            null,
+                                            null,
+                                            Instant.parse("2026-08-01T00:00:00Z"),
+                                            Instant.parse("2026-09-01T23:59:59Z"),
+                                            null,
+                                            null))
+                            .results())
+                    .singleElement()
+                    .extracting(result -> result.metadata().filename())
+                    .isEqualTo("invoice-current.pdf");
+            assertThat(index.searchPage(
+                                    "invoice",
+                                    10,
+                                    new MetadataSearchFilters(null, null, null, null, 10L * 1024 * 1024, null))
+                            .results())
+                    .singleElement()
+                    .extracting(result -> result.metadata().filename())
+                    .isEqualTo("invoice-archive.docx");
+            assertThat(index.searchPage(
+                                    "invoice",
+                                    10,
+                                    new MetadataSearchFilters(
+                                            FileSystemEntryKind.DIRECTORY, null, null, null, null, null))
+                            .results())
+                    .singleElement()
+                    .extracting(result -> result.metadata().filename())
+                    .isEqualTo("invoice-folder");
+        }
+    }
+
+    @Test
     void emptyQueriesAreSafeAndLimitsAreBounded() {
         try (LuceneMetadataIndex index = new LuceneMetadataIndex(temporaryDirectory.resolve("index"))) {
             assertThat(index.search("   ", 10)).isEmpty();
@@ -219,6 +286,10 @@ class LuceneMetadataIndexTests {
     }
 
     private static FileMetadata metadata(Path path, long size) {
+        return metadata(path, size, Instant.parse("2026-09-01T10:15:30Z"), FileSystemEntryKind.FILE);
+    }
+
+    private static FileMetadata metadata(Path path, long size, Instant modifiedAt, FileSystemEntryKind kind) {
         Path absolutePath = path.toAbsolutePath().normalize();
         String filename = absolutePath.getFileName().toString();
         int dot = filename.lastIndexOf('.');
@@ -228,9 +299,9 @@ class LuceneMetadataIndexTests {
                 PathNormalizer.searchKey(absolutePath),
                 filename,
                 extension,
-                FileSystemEntryKind.FILE,
+                kind,
                 size,
-                Instant.parse("2026-09-01T10:15:30Z"),
+                modifiedAt,
                 Instant.parse("2026-01-01T00:00:00Z"));
     }
 }

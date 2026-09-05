@@ -4,6 +4,7 @@ import {
   openFile,
   revealFile,
   type SearchResponse,
+  type SearchFilters,
   type SearchResult,
   type SearchSnippet,
 } from '../api/deepfindApi'
@@ -14,10 +15,27 @@ interface SearchPanelProps {
   loading: boolean
   error: string | null
   onQueryChange: (query: string) => void
+  onFiltersChange: (filters: SearchFilters) => void
 }
 
-export function SearchPanel({ query, response, loading, error, onQueryChange }: SearchPanelProps) {
+type FilterChoices = {
+  kind: '' | 'FILE' | 'DIRECTORY' | 'SYMBOLIC_LINK'
+  extension: string
+  modifiedDays: '' | '1' | '7' | '30' | '365'
+  sizeRange: '' | 'UNDER_1_MB' | 'ONE_TO_TEN_MB' | 'TEN_TO_HUNDRED_MB' | 'OVER_100_MB'
+}
+
+const EMPTY_FILTERS: FilterChoices = { kind: '', extension: '', modifiedDays: '', sizeRange: '' }
+const MEBIBYTE = 1024 ** 2
+
+export function SearchPanel({ query, response, loading, error, onQueryChange, onFiltersChange }: SearchPanelProps) {
   const hasQuery = query.trim().length > 0
+  const [filters, setFilters] = useState<FilterChoices>(EMPTY_FILTERS)
+
+  function applyFilters(next: FilterChoices) {
+    setFilters(next)
+    onFiltersChange(toApiFilters(next))
+  }
 
   return (
     <section className="search-panel" aria-labelledby="search-heading">
@@ -32,6 +50,52 @@ export function SearchPanel({ query, response, loading, error, onQueryChange }: 
           </p>
         ) : null}
       </div>
+
+      <fieldset className="search-filters">
+        <legend>Filter results</legend>
+        <label>
+          Entry type
+          <select value={filters.kind} onChange={(event) => applyFilters({ ...filters, kind: event.target.value as FilterChoices['kind'] })}>
+            <option value="">All entries</option>
+            <option value="FILE">Files</option>
+            <option value="DIRECTORY">Folders</option>
+            <option value="SYMBOLIC_LINK">Links</option>
+          </select>
+        </label>
+        <label>
+          Extension
+          <input
+            value={filters.extension}
+            onChange={(event) => applyFilters({ ...filters, extension: event.target.value })}
+            placeholder="pdf"
+            maxLength={32}
+            aria-label="File extension"
+          />
+        </label>
+        <label>
+          Modified
+          <select value={filters.modifiedDays} onChange={(event) => applyFilters({ ...filters, modifiedDays: event.target.value as FilterChoices['modifiedDays'] })}>
+            <option value="">Any time</option>
+            <option value="1">Last 24 hours</option>
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="365">Last year</option>
+          </select>
+        </label>
+        <label>
+          Size
+          <select value={filters.sizeRange} onChange={(event) => applyFilters({ ...filters, sizeRange: event.target.value as FilterChoices['sizeRange'] })}>
+            <option value="">Any size</option>
+            <option value="UNDER_1_MB">Under 1 MB</option>
+            <option value="ONE_TO_TEN_MB">1–10 MB</option>
+            <option value="TEN_TO_HUNDRED_MB">10–100 MB</option>
+            <option value="OVER_100_MB">Over 100 MB</option>
+          </select>
+        </label>
+        <button type="button" className="clear-filters" disabled={sameFilters(filters, EMPTY_FILTERS)} onClick={() => applyFilters(EMPTY_FILTERS)}>
+          Clear filters
+        </button>
+      </fieldset>
 
       <label className="visually-hidden" htmlFor="search">Search filenames, paths, and document content</label>
       <div className="search-box">
@@ -157,11 +221,35 @@ function matchLabel(matchType: SearchResult['matchType']) {
   return {
     EXACT_FILENAME: 'Exact filename',
     FILENAME_PREFIX: 'Filename prefix',
-      FILENAME: 'Filename',
-      PATH: 'Folder path',
-      EXACT_PHRASE: 'Exact phrase',
-      CONTENT: 'Document content',
+    FILENAME: 'Filename',
+    PATH: 'Folder path',
+    EXACT_PHRASE: 'Exact phrase',
+    CONTENT: 'Document content',
   }[matchType]
+}
+
+function toApiFilters(filters: FilterChoices): SearchFilters {
+  const result: SearchFilters = {}
+  if (filters.kind) result.kind = filters.kind
+  if (filters.extension.trim()) result.extension = filters.extension.trim()
+  if (filters.modifiedDays) {
+    result.modifiedAfter = new Date(Date.now() - Number(filters.modifiedDays) * 24 * 60 * 60 * 1_000).toISOString()
+  }
+  if (filters.sizeRange === 'UNDER_1_MB') result.maxSizeBytes = MEBIBYTE - 1
+  if (filters.sizeRange === 'ONE_TO_TEN_MB') {
+    result.minSizeBytes = MEBIBYTE
+    result.maxSizeBytes = 10 * MEBIBYTE - 1
+  }
+  if (filters.sizeRange === 'TEN_TO_HUNDRED_MB') {
+    result.minSizeBytes = 10 * MEBIBYTE
+    result.maxSizeBytes = 100 * MEBIBYTE - 1
+  }
+  if (filters.sizeRange === 'OVER_100_MB') result.minSizeBytes = 100 * MEBIBYTE
+  return result
+}
+
+function sameFilters(first: FilterChoices, second: FilterChoices) {
+  return Object.keys(first).every((key) => first[key as keyof FilterChoices] === second[key as keyof FilterChoices])
 }
 
 function renderSnippet(snippet: SearchSnippet) {

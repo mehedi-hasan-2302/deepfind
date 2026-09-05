@@ -61,6 +61,15 @@ export interface SearchResponse {
   results: SearchResult[]
 }
 
+export interface SearchFilters {
+  kind?: 'FILE' | 'DIRECTORY' | 'SYMBOLIC_LINK' | 'OTHER'
+  extension?: string
+  modifiedAfter?: string
+  modifiedBefore?: string
+  minSizeBytes?: number
+  maxSizeBytes?: number
+}
+
 export interface FileActionResponse {
   action: 'OPENED' | 'REVEALED'
 }
@@ -100,8 +109,16 @@ export async function getIndexWatchStatus(signal?: AbortSignal): Promise<IndexWa
   return requestJson<IndexWatchStatus>('/api/index/watch-status', { signal })
 }
 
-export async function searchFiles(query: string, limit = 50, signal?: AbortSignal): Promise<SearchResponse> {
+export async function searchFiles(
+  query: string,
+  limit = 50,
+  filters: SearchFilters = {},
+  signal?: AbortSignal,
+): Promise<SearchResponse> {
   const parameters = new URLSearchParams({ query, limit: String(limit) })
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') parameters.set(key, String(value))
+  })
   return requestJson<SearchResponse>(`/api/search?${parameters}`, { signal })
 }
 

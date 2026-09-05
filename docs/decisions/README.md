@@ -21,3 +21,4 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0017 — Reconcile index state from filesystem metadata](0017-metadata-aware-periodic-reconciliation.md)
 - [0018 — Expose explicit refresh and freshness health](0018-expose-refresh-and-freshness-health.md)
 - [0019 — Add safe explicit phrase search](0019-safe-explicit-phrase-search.md)
+- [0020 — Keep search filters explicit and non-scoring](0020-explicit-non-scoring-search-filters.md)

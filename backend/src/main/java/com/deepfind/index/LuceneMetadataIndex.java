@@ -6,6 +6,7 @@ import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.PathNormalizer;
 import com.deepfind.search.ContentSnippetGenerator;
 import com.deepfind.search.MetadataMatchType;
+import com.deepfind.search.MetadataSearchFilters;
 import com.deepfind.search.MetadataSearchPage;
 import com.deepfind.search.MetadataSearchResult;
 import com.deepfind.search.SearchSnippet;
@@ -23,6 +24,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
+import org.apache.lucene.document.LongPoint;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexCommit;
 import org.apache.lucene.index.IndexWriter;
@@ -222,7 +224,12 @@ public final class LuceneMetadataIndex implements AutoCloseable {
     }
 
     public MetadataSearchPage searchPage(String queryText, int limit) {
+        return searchPage(queryText, limit, MetadataSearchFilters.none());
+    }
+
+    public MetadataSearchPage searchPage(String queryText, int limit, MetadataSearchFilters filters) {
         ensureOpen();
+        Objects.requireNonNull(filters, "filters must not be null");
         String query =
                 Objects.requireNonNull(queryText, "queryText must not be null").trim();
         if (query.isEmpty()) {
@@ -237,7 +244,7 @@ public final class LuceneMetadataIndex implements AutoCloseable {
             if (parsedQuery.literalText().isEmpty()) {
                 return new MetadataSearchPage(0, List.of());
             }
-            Query luceneQuery = buildQuery(parsedQuery);
+            Query luceneQuery = applyFilters(buildQuery(parsedQuery), filters);
             searcherManager.maybeRefreshBlocking();
             IndexSearcher searcher = searcherManager.acquire();
             try {
@@ -251,6 +258,41 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         } catch (IOException exception) {
             throw new IndexAccessException("DeepFind could not search the local index.", exception);
         }
+    }
+
+    private static Query applyFilters(Query textQuery, MetadataSearchFilters filters) {
+        BooleanQuery.Builder filtered = new BooleanQuery.Builder();
+        filtered.add(textQuery, BooleanClause.Occur.MUST);
+        if (filters.kind() != null) {
+            filtered.add(
+                    new TermQuery(
+                            new Term(LuceneIndexSchema.KIND, filters.kind().name())),
+                    BooleanClause.Occur.FILTER);
+        }
+        if (filters.extension() != null) {
+            filtered.add(
+                    new TermQuery(new Term(LuceneIndexSchema.EXTENSION, filters.extension())),
+                    BooleanClause.Occur.FILTER);
+        }
+        if (filters.modifiedAfter() != null || filters.modifiedBefore() != null) {
+            long minimum = filters.modifiedAfter() == null
+                    ? Long.MIN_VALUE
+                    : filters.modifiedAfter().toEpochMilli();
+            long maximum = filters.modifiedBefore() == null
+                    ? Long.MAX_VALUE
+                    : filters.modifiedBefore().toEpochMilli();
+            filtered.add(
+                    LongPoint.newRangeQuery(LuceneIndexSchema.MODIFIED_AT, minimum, maximum),
+                    BooleanClause.Occur.FILTER);
+        }
+        if (filters.minSizeBytes() != null || filters.maxSizeBytes() != null) {
+            long minimum = filters.minSizeBytes() == null ? 0 : filters.minSizeBytes();
+            long maximum = filters.maxSizeBytes() == null ? Long.MAX_VALUE : filters.maxSizeBytes();
+            filtered.add(
+                    LongPoint.newRangeQuery(LuceneIndexSchema.SIZE_BYTES, minimum, maximum),
+                    BooleanClause.Occur.FILTER);
+        }
+        return filtered.build();
     }
 
     @Override

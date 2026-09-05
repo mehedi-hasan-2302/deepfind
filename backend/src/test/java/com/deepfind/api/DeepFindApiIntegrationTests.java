@@ -99,6 +99,16 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.results[0].filename").value("final_submission.docx"))
                 .andExpect(jsonPath("$.results[0].matchType").value("PATH"));
 
+        mockMvc.perform(get("/api/search")
+                        .param("query", "final")
+                        .param("kind", "FILE")
+                        .param("extension", ".DOCX")
+                        .param("minSizeBytes", "1")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalHits").value(1))
+                .andExpect(jsonPath("$.results[0].filename").value("final_submission.docx"));
+
         mockMvc.perform(get("/api/search").param("query", "starling").param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalHits").value(1))
@@ -135,6 +145,17 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
         mockMvc.perform(get("/api/index/history").param("limit", "101"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(get("/api/search").param("query", "invoice").param("kind", "UNKNOWN"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(get("/api/search")
+                        .param("query", "invoice")
+                        .param("minSizeBytes", "100")
+                        .param("maxSizeBytes", "10"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }

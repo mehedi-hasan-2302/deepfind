@@ -15,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -56,7 +57,8 @@ public class ApiExceptionHandler {
     @ExceptionHandler({
         MethodArgumentNotValidException.class,
         ConstraintViolationException.class,
-        HandlerMethodValidationException.class
+        HandlerMethodValidationException.class,
+        MethodArgumentTypeMismatchException.class
     })
     ResponseEntity<ApiError> invalidRequest() {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "The request contains invalid values.", Map.of());

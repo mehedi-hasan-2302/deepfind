@@ -9,6 +9,7 @@ import {
   type IndexStatus,
   type IndexWatchStatus,
   type SearchResponse,
+  type SearchFilters,
 } from './api/deepfindApi'
 import { IndexPanel } from './components/IndexPanel'
 import { SearchPanel } from './components/SearchPanel'
@@ -26,6 +27,7 @@ function App() {
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const [searchFilters, setSearchFilters] = useState<SearchFilters>({})
 
   useEffect(() => {
     const controller = new AbortController()
@@ -94,7 +96,7 @@ function App() {
     const timer = window.setTimeout(() => {
       setSearchLoading(true)
       setSearchError(null)
-      void searchFiles(normalizedQuery, 50, controller.signal)
+      void searchFiles(normalizedQuery, 50, searchFilters, controller.signal)
         .then(setSearchResponse)
         .catch((error: unknown) => {
           if (!isAbort(error)) setSearchError(errorMessage(error))
@@ -108,7 +110,7 @@ function App() {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [query])
+  }, [query, searchFilters])
 
   function changeQuery(nextQuery: string) {
     setQuery(nextQuery)
@@ -171,6 +173,7 @@ function App() {
           loading={searchLoading}
           error={searchError}
           onQueryChange={changeQuery}
+          onFiltersChange={setSearchFilters}
         />
       </div>
     </main>
