@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 4 — Incremental Updates and Freshness (in progress)
+Phase 4 — Incremental Updates and Freshness (complete)
 
 ## Last completed step
 
-STEP 15 — Reconcile stale filesystem state automatically.
+STEP 16 — Expose manual refresh and live freshness status.
 
 ## Completed
 
@@ -75,10 +75,15 @@ STEP 15 — Reconcile stale filesystem state automatically.
 - Shared single-job scheduling, durable history, and watcher pause/resume coordination so reconciliation never overlaps a full indexing job.
 - Reconciliation coverage for unchanged-content preservation, new/changed/deleted paths, incomplete extraction recovery, path-prefix boundaries, uncertainty scheduling, and job-lane exclusion.
 - Terminal failure publication now follows the durable history write attempt, preventing a transient terminal-status/history inconsistency.
+- Asynchronous `POST /api/index/refresh` for changed-only reconciliation of the persisted selected root, with stable missing-root and busy-job errors.
+- Read-only `GET /api/index/watch-status` with safe stopped, watching, reconciliation-required, and failed states.
+- Frontend live-update health polling, clear pause/recovery wording, and a guarded manual **Refresh index** action that cannot target an unsaved path.
+- HTTP, service, error-mapping, and React interaction coverage for refresh, freshness state, job exclusion, and unavailable selection.
+- Phase 4 exit criteria met: create, edit, rename, and delete changes update results automatically, with periodic and explicit reconciliation available when event history is uncertain.
 
 ## Current behavior
 
-The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned. The persisted selected root is watched automatically, and ordinary create, content edit, rename, and delete events update search results. Metadata-aware reconciliation runs after startup and periodically, or promptly after explicit watcher uncertainty, without re-extracting unchanged content. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Reconciliation provides eventual rather than atomic filesystem consistency; manual refresh and watcher status are not yet exposed in the UI.
+The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned. The persisted selected root is watched automatically, and ordinary create, content edit, rename, and delete events update search results. Metadata-aware reconciliation runs after startup and periodically, or promptly after explicit watcher uncertainty, without re-extracting unchanged content. The interface displays live-update health and can request immediate refresh of the persisted root. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Reconciliation provides eventual rather than atomic filesystem consistency.
 
 ## Commands verified
 
@@ -108,6 +113,8 @@ The user can index a local folder and search filenames, paths, and text inside s
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 13 — passed; 64 tests, executable backend JAR packaging, Spring configuration binding, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 14 — passed; 67 tests, native end-to-end freshness, job lifecycle integration, executable backend JAR packaging, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 15 — passed; 72 tests, scheduled metadata reconciliation, single-job exclusion, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
+- `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 16 — passed; 74 tests, manual refresh and watcher-health API coverage, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
+- `npm run check` in `frontend` after STEP 16 — passed; ESLint, 8 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 
 ## Known failures
 
@@ -115,7 +122,7 @@ No product failures recorded. Maven is not installed globally, so all backend co
 
 ## Next recommended step
 
-Expose manual refresh plus watcher/reconciliation status through the loopback API and UI, completing the remaining Phase 4 recovery controls.
+Begin Phase 5 search-quality work with explicit phrase-search semantics and ranking regression coverage before adding filters, fuzzy matching, and pagination.
 
 ## Important architectural notes
 
@@ -133,6 +140,7 @@ Expose manual refresh plus watcher/reconciliation status through the loopback AP
 - Bounded ordered event application, recursive directory creation, subtree deletion, rename semantics, and reconciliation triggers are defined by ADR 0015.
 - Persisted-root restoration, single active-session ownership, full-scan pause/resume, and shutdown ordering are defined by ADR 0016.
 - Metadata snapshots, changed-only extraction, proven-missing pruning, scheduled repair, and shared job exclusion are defined by ADR 0017.
+- Manual refresh, independent freshness status, stable API errors, and guarded frontend controls are defined by ADR 0018.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
 - Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
 - The desktop shell remains deferred until its owning phase.

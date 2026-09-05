@@ -21,6 +21,8 @@
 - Filesystem watcher tests use the host's native Java watch provider. Symbolic-link coverage is skipped when the current Windows account cannot create links. Provider overflow requests automatic reconciliation; the scheduler retries once the single indexing worker is idle.
 - Incremental event buffering defaults to 256 entries. If diagnostics later show sustained watcher overflow on a very active tree, increasing `deepfind.watcher.queue-capacity` can absorb a larger burst but uses more memory; automatic reconciliation remains the correctness backstop.
 - Automatic reconciliation starts after 30 seconds and normally runs every 15 minutes. It may traverse the full selected tree, but unchanged files are not re-extracted. Use `deepfind.reconciliation.*` settings to adjust the cadence during development; an excessively short interval can create unnecessary filesystem work.
+- **Live updates active** means native changes are being tracked. **Index repair pending** means an event history became uncertain and automatic reconciliation will retry when the indexing worker is free. **Live updates unavailable** means the selected folder could not be watched; restore access and use **Refresh index**, or wait for automatic retry.
+- **Refresh index** reconciles the persisted selected folder and is disabled while another indexing job is running or while the path field differs from that selected folder. Use **Start indexing** after changing the path.
 
 ## Local database issues
 

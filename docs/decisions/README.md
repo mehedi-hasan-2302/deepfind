@@ -19,3 +19,4 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0015 — Apply filesystem events through a bounded serial index session](0015-bounded-incremental-index-application.md)
 - [0016 — Coordinate one active watcher with full indexing jobs](0016-coordinate-selected-root-watcher-lifecycle.md)
 - [0017 — Reconcile index state from filesystem metadata](0017-metadata-aware-periodic-reconciliation.md)
+- [0018 — Expose explicit refresh and freshness health](0018-expose-refresh-and-freshness-health.md)

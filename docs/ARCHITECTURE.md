@@ -2,7 +2,7 @@
 
 ## Status
 
-Phases 1–3 provide an end-to-end local search slice with durable index, root configuration, scan history, and interrupted-run detection. Phase 4 now has automatic selected-root watching, bounded incremental Lucene updates, and scheduled metadata-aware reconciliation. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, guarded platform file actions, event application, watcher lifecycle coordination, and automatic repair are implemented. Manual refresh, watcher-status UX, and desktop packaging remain pending.
+Phases 1–4 provide an end-to-end local search slice with durable index, root configuration, scan history, interrupted-run detection, automatic selected-root watching, bounded incremental Lucene updates, scheduled reconciliation, manual refresh, and visible freshness health. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, guarded platform file actions, event application, watcher lifecycle coordination, and automatic repair are implemented. Search-quality expansion, indexing UX, hardening, and desktop packaging remain.
 
 ## Components
 
@@ -38,6 +38,8 @@ Create and modify events re-read no-follow metadata; regular files are re-extrac
 Pausing during a full scan prevents unordered watcher mutations from racing the traversal, but it introduces a window in which a change can occur after its path was visited and before watching resumes. Scheduled reconciliation repairs this gap eventually. It also runs promptly after the watcher reports uncertainty, subject to the shared indexing worker becoming idle.
 
 `MetadataReconciliationService` compares each discovered entry with a read-only Lucene metadata snapshot. It preserves unchanged documents, re-extracts only new, changed, or never-attempted regular files, and deletes scoped entries only when Java can prove the source path absent with no-follow semantics. Unknown or unreadable existence is preserved rather than guessed deleted. `ReconciliationScheduler` polls every 30 seconds, starts a repair immediately for reconciliation-required watcher state, and otherwise enforces a 15-minute cadence. Reconciliation uses the same single-job lane, durable scan history, and watcher pause/resume boundary as a full scan, so the two never overlap. See ADR 0017.
+
+The local API exposes `POST /api/index/refresh` for an explicit changed-only repair and `GET /api/index/watch-status` for safe root, state, and message fields. Manual refresh rejects missing roots and overlapping jobs through stable API errors. The frontend polls freshness independently of indexing progress, explains temporary job-time pauses, and offers refresh only for the persisted selected root. See ADR 0018.
 
 ## Data flow
 

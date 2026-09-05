@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import {
   DeepFindApiError,
+  getIndexWatchStatus,
   getIndexStatus,
+  refreshIndex,
   searchFiles,
   startIndex,
   type IndexStatus,
+  type IndexWatchStatus,
   type SearchResponse,
 } from './api/deepfindApi'
 import { IndexPanel } from './components/IndexPanel'
@@ -12,10 +15,12 @@ import { SearchPanel } from './components/SearchPanel'
 
 const SEARCH_DELAY_MS = 300
 const STATUS_POLL_MS = 500
+const WATCH_STATUS_POLL_MS = 2_000
 
 function App() {
   const [root, setRoot] = useState('')
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
+  const [watchStatus, setWatchStatus] = useState<IndexWatchStatus | null>(null)
   const [indexError, setIndexError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null)
@@ -34,6 +39,28 @@ function App() {
         if (!isAbort(error)) setIndexError(errorMessage(error))
       })
     return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    let timer = 0
+
+    async function pollWatchStatus() {
+      try {
+        const status = await getIndexWatchStatus()
+        if (active) setWatchStatus(status)
+      } catch {
+        if (active) setWatchStatus(null)
+      } finally {
+        if (active) timer = window.setTimeout(pollWatchStatus, WATCH_STATUS_POLL_MS)
+      }
+    }
+
+    void pollWatchStatus()
+    return () => {
+      active = false
+      window.clearTimeout(timer)
+    }
   }, [])
 
   useEffect(() => {
@@ -99,6 +126,16 @@ function App() {
     }
   }
 
+  async function refreshSelectedRoot() {
+    setIndexError(null)
+    try {
+      setIndexStatus(await refreshIndex())
+      setWatchStatus(await getIndexWatchStatus())
+    } catch (error) {
+      setIndexError(errorMessage(error))
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -122,9 +159,11 @@ function App() {
         <IndexPanel
           root={root}
           status={indexStatus}
+          watchStatus={watchStatus}
           error={indexError}
           onRootChange={setRoot}
           onStart={beginIndexing}
+          onRefresh={refreshSelectedRoot}
         />
         <SearchPanel
           query={query}

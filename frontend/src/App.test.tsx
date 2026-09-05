@@ -113,6 +113,53 @@ describe('App', () => {
     }))
   })
 
+  it('shows live freshness and manually refreshes the selected folder', async () => {
+    const readyStatus: IndexStatus = {
+      ...idleStatus,
+      jobId: 'completed-job',
+      state: 'COMPLETED',
+      root: 'C:\\Docs',
+      entriesDiscovered: 42,
+      entriesIndexed: 42,
+      finishedAt: '2026-09-04T08:00:02Z',
+    }
+    const refreshingStatus: IndexStatus = {
+      ...readyStatus,
+      jobId: 'refresh-job',
+      state: 'RUNNING',
+      currentPath: 'C:\\Docs',
+      entriesDiscovered: 0,
+      entriesIndexed: 0,
+      finishedAt: null,
+    }
+    let statusRequests = 0
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString()
+      if (url === '/api/index/status') {
+        statusRequests += 1
+        return jsonResponse(readyStatus)
+      }
+      if (url === '/api/index/watch-status') {
+        return jsonResponse({ root: 'C:\\Docs', state: 'WATCHING', message: 'Filesystem changes are being tracked.' })
+      }
+      if (url === '/api/index/refresh' && init?.method === 'POST') return jsonResponse(refreshingStatus, 202)
+      return jsonResponse({}, 404)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    expect(await screen.findByText('Live updates active')).toBeInTheDocument()
+    const refreshButton = screen.getByRole('button', { name: /refresh index/i })
+    expect(refreshButton).toBeEnabled()
+    fireEvent.click(refreshButton)
+
+    expect(await screen.findByText(/live updates paused/i)).toBeInTheDocument()
+    expect(await screen.findByText(/42 entries are ready to search/i, {}, { timeout: 2_000 })).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith('/api/index/refresh', { method: 'POST' })
+    expect(statusRequests).toBeGreaterThan(1)
+  })
+
   it('debounces content search and renders useful result context', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString()

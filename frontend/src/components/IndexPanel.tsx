@@ -1,16 +1,19 @@
 import type { FormEvent } from 'react'
-import type { IndexStatus } from '../api/deepfindApi'
+import type { IndexStatus, IndexWatchStatus } from '../api/deepfindApi'
 
 interface IndexPanelProps {
   root: string
   status: IndexStatus | null
+  watchStatus: IndexWatchStatus | null
   error: string | null
   onRootChange: (root: string) => void
   onStart: () => Promise<void>
+  onRefresh: () => Promise<void>
 }
 
-export function IndexPanel({ root, status, error, onRootChange, onStart }: IndexPanelProps) {
+export function IndexPanel({ root, status, watchStatus, error, onRootChange, onStart, onRefresh }: IndexPanelProps) {
   const isRunning = status?.state === 'RUNNING'
+  const canRefresh = Boolean(status?.root) && root.trim() === status?.root
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -40,9 +43,14 @@ export function IndexPanel({ root, status, error, onRootChange, onStart }: Index
             autoComplete="off"
             disabled={isRunning}
           />
-          <button type="submit" disabled={isRunning || root.trim().length === 0}>
-            {isRunning ? 'Indexing…' : 'Start indexing'}
-          </button>
+          <div className="index-actions">
+            <button type="submit" disabled={isRunning || root.trim().length === 0}>
+              {isRunning ? 'Indexing…' : 'Start indexing'}
+            </button>
+            <button type="button" className="secondary-button" disabled={isRunning || !canRefresh} onClick={() => void onRefresh()}>
+              Refresh index
+            </button>
+          </div>
         </div>
         <p className="field-help">Enter a full folder path. A native folder picker will arrive with desktop packaging.</p>
       </form>
@@ -67,8 +75,32 @@ export function IndexPanel({ root, status, error, onRootChange, onStart }: Index
           </p>
         ) : null}
       </div>
+
+      <div className={`watch-status watch-${watchStatus?.state.toLowerCase() ?? 'unknown'}`} aria-live="polite">
+        <span className="watch-indicator" aria-hidden="true" />
+        <div>
+          <strong>{watchStatusLabel(watchStatus, isRunning)}</strong>
+          <p>{watchStatusSummary(watchStatus, isRunning)}</p>
+        </div>
+      </div>
     </aside>
   )
+}
+
+function watchStatusLabel(status: IndexWatchStatus | null, isRunning: boolean) {
+  if (isRunning) return 'Live updates paused'
+  if (!status?.state) return 'Checking live updates'
+  return {
+    STOPPED: 'Live updates stopped',
+    WATCHING: 'Live updates active',
+    RECONCILIATION_REQUIRED: 'Index repair pending',
+    FAILED: 'Live updates unavailable',
+  }[status.state]
+}
+
+function watchStatusSummary(status: IndexWatchStatus | null, isRunning: boolean) {
+  if (isRunning) return 'DeepFind will resume watching after this indexing job finishes.'
+  return status?.message ?? 'DeepFind is checking filesystem change tracking.'
 }
 
 function Metric({ label, value, tone }: { label: string; value: number; tone?: string }) {

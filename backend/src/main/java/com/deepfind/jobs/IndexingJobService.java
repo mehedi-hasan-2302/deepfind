@@ -141,6 +141,20 @@ public class IndexingJobService {
         return true;
     }
 
+    public synchronized IndexingJobStatus reconcileSelectedRoot() {
+        if (status.get().state() == IndexingJobState.RUNNING) {
+            throw new IndexingAlreadyRunningException();
+        }
+        Path root = rootCatalog.lastSelectedRoot().orElseThrow(NoIndexRootSelectedException::new);
+        if (!Files.isDirectory(root) || !Files.isReadable(root)) {
+            throw new IndexRootNotAccessibleException("DeepFind cannot read the selected folder.");
+        }
+        if (reconciliationService == null) {
+            throw new IllegalStateException("Reconciliation is unavailable.");
+        }
+        return schedule(PathNormalizer.absolute(root), false, true);
+    }
+
     private IndexingJobStatus schedule(Path root, boolean rememberSelection, boolean reconciliation) {
         Instant startedAt = clock.instant();
         if (rememberSelection) {

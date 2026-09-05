@@ -25,6 +25,14 @@ export interface IndexStatus {
   finishedAt: string | null
 }
 
+export type IndexWatchState = 'STOPPED' | 'WATCHING' | 'RECONCILIATION_REQUIRED' | 'FAILED'
+
+export interface IndexWatchStatus {
+  root: string | null
+  state: IndexWatchState
+  message: string
+}
+
 export interface SearchResult {
   path: string
   filename: string
@@ -82,6 +90,14 @@ export async function startIndex(root: string): Promise<IndexStatus> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ root }),
   })
+}
+
+export async function refreshIndex(): Promise<IndexStatus> {
+  return requestJson<IndexStatus>('/api/index/refresh', { method: 'POST' })
+}
+
+export async function getIndexWatchStatus(signal?: AbortSignal): Promise<IndexWatchStatus> {
+  return requestJson<IndexWatchStatus>('/api/index/watch-status', { signal })
 }
 
 export async function searchFiles(query: string, limit = 50, signal?: AbortSignal): Promise<SearchResponse> {

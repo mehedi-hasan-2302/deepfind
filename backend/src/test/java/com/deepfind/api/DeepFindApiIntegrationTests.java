@@ -62,12 +62,33 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.entriesIndexed").value(6))
                 .andExpect(jsonPath("$.failures").value(0));
 
+        mockMvc.perform(get("/api/index/watch-status"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.root")
+                        .value(root.toAbsolutePath().normalize().toString()))
+                .andExpect(jsonPath("$.state").isString())
+                .andExpect(jsonPath("$.message").isNotEmpty());
+
         mockMvc.perform(get("/api/index/history").param("limit", "1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].state").value("COMPLETED"))
                 .andExpect(jsonPath("$[0].root")
                         .value(root.toAbsolutePath().normalize().toString()))
                 .andExpect(jsonPath("$[0].entriesIndexed").value(6));
+
+        mockMvc.perform(post("/api/index/refresh"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.state").value("RUNNING"))
+                .andExpect(jsonPath("$.root")
+                        .value(root.toAbsolutePath().normalize().toString()));
+
+        awaitCompleted(Duration.ofSeconds(15));
+
+        mockMvc.perform(get("/api/index/history").param("limit", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].state").value("COMPLETED"))
+                .andExpect(jsonPath("$[0].root")
+                        .value(root.toAbsolutePath().normalize().toString()));
 
         mockMvc.perform(get("/api/search").param("query", "thesis final").param("limit", "10"))
                 .andExpect(status().isOk())

@@ -1,5 +1,6 @@
 package com.deepfind.api.index;
 
+import com.deepfind.index.IndexWatchCoordinator;
 import com.deepfind.jobs.IndexingJobService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -20,9 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class IndexController {
 
     private final IndexingJobService jobs;
+    private final IndexWatchCoordinator watches;
 
-    public IndexController(IndexingJobService jobs) {
+    public IndexController(IndexingJobService jobs, IndexWatchCoordinator watches) {
         this.jobs = jobs;
+        this.watches = watches;
     }
 
     @PostMapping("/start")
@@ -34,6 +37,17 @@ public class IndexController {
     @GetMapping("/status")
     public IndexStatusResponse status() {
         return IndexStatusResponse.from(jobs.status());
+    }
+
+    @PostMapping("/refresh")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public IndexStatusResponse refresh() {
+        return IndexStatusResponse.from(jobs.reconcileSelectedRoot());
+    }
+
+    @GetMapping("/watch-status")
+    public IndexWatchStatusResponse watchStatus() {
+        return IndexWatchStatusResponse.from(watches.status());
     }
 
     @GetMapping("/history")

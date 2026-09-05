@@ -3,6 +3,7 @@ package com.deepfind.api;
 import com.deepfind.index.IndexAccessException;
 import com.deepfind.jobs.IndexRootNotAccessibleException;
 import com.deepfind.jobs.IndexingAlreadyRunningException;
+import com.deepfind.jobs.NoIndexRootSelectedException;
 import com.deepfind.platform.FileActionUnavailableException;
 import com.deepfind.platform.InvalidFileActionException;
 import jakarta.validation.ConstraintViolationException;
@@ -26,6 +27,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(IndexingAlreadyRunningException.class)
     ResponseEntity<ApiError> indexingAlreadyRunning(IndexingAlreadyRunningException exception) {
         return error(HttpStatus.CONFLICT, "INDEX_JOB_ALREADY_RUNNING", exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(NoIndexRootSelectedException.class)
+    ResponseEntity<ApiError> noIndexRootSelected(NoIndexRootSelectedException exception) {
+        return error(HttpStatus.CONFLICT, "INDEX_ROOT_NOT_SELECTED", exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(IndexAccessException.class)

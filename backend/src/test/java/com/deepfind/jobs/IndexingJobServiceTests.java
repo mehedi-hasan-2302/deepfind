@@ -127,6 +127,40 @@ class IndexingJobServiceTests {
     }
 
     @Test
+    void manualReconciliationRequiresASelectedRoot() throws Exception {
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        DeepFindExtractionProperties extractionProperties =
+                new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(1), 1, 2);
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("missing-root-index"))) {
+            MetadataIndexingService indexing = new MetadataIndexingService(
+                    new FileSystemDiscoveryService(),
+                    index,
+                    path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
+                    extractionProperties);
+            MetadataReconciliationService reconciliation = new MetadataReconciliationService(
+                    new FileSystemDiscoveryService(),
+                    index,
+                    path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
+                    extractionProperties);
+            IndexingJobService jobs = new IndexingJobService(
+                    indexing,
+                    reconciliation,
+                    new RecordingRootCatalog(null),
+                    new RecordingScanHistory(null),
+                    new RecordingWatchLifecycle(),
+                    Clock.fixed(Instant.parse("2026-09-05T09:30:00Z"), ZoneOffset.UTC),
+                    executor);
+            try {
+                assertThatThrownBy(jobs::reconcileSelectedRoot)
+                        .isInstanceOf(NoIndexRootSelectedException.class)
+                        .hasMessage("Choose and index a folder before refreshing it.");
+            } finally {
+                jobs.shutdown();
+            }
+        }
+    }
+
+    @Test
     void restoresTheLastSelectedRootAndRecordsSuccessfulCompletion() throws Exception {
         Path restoredRoot = root.resolve("previous").toAbsolutePath().normalize();
         Path nextRoot = java.nio.file.Files.createDirectory(root.resolve("next"));
