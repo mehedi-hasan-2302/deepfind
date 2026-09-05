@@ -18,6 +18,7 @@
 - Unsupported, oversized, unreadable, disguised, or malformed documents remain filename/path searchable when their metadata can be read, but their contents are not searchable.
 - Content extraction defaults to 20 MiB, 500,000 characters, and 15 seconds per file. Review `deepfind.extraction.*` settings if a legitimate local document is skipped.
 - Scanned/image-only PDFs require future local OCR support and normally provide no searchable text today.
+- Filesystem watcher tests use the host's native Java watch provider. Symbolic-link coverage is skipped when the current Windows account cannot create links. The watcher exposes provider overflow as a reconciliation signal; automatic index repair is part of the remaining Phase 4 work.
 
 ## Local database issues
 

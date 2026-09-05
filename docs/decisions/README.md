@@ -15,3 +15,4 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0011 — Store bounded source text for safe search snippets](0011-safe-content-snippets.md)
 - [0012 — Use SQLite for structured local state](0012-sqlite-structured-state.md)
 - [0013 — Persist scan lifecycle and classify interrupted runs](0013-persist-scan-lifecycle.md)
+- [0014 — Use a recursive, reconciliation-aware filesystem watcher](0014-recursive-filesystem-watcher.md)

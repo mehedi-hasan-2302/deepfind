@@ -2,7 +2,7 @@
 
 ## Status
 
-Phases 1–3 provide an end-to-end local search slice with durable index, root configuration, scan history, and interrupted-run detection. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, and guarded platform file actions are implemented. Automatic filesystem change tracking and desktop packaging remain deferred.
+Phases 1–3 provide an end-to-end local search slice with durable index, root configuration, scan history, and interrupted-run detection. Phase 4 now has a recursive filesystem event boundary. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, guarded platform file actions, and low-level change detection are implemented. Applying change events to Lucene, reconciliation, and desktop packaging remain pending.
 
 ## Components
 
@@ -23,6 +23,12 @@ Controllers will not operate Lucene readers, Tika parsers, databases, or filesys
 
 Discovery uses Java NIO `walkFileTree` and emits immutable metadata, progress snapshots, and bounded failure descriptions through an observer. It does not retain the discovered tree in memory. Directory symlinks are indexed as link entries but are not followed. A small default exclusion set removes common generated trees; explicit exclusions can target an absolute subtree. See ADR 0005.
 
+## Filesystem change detection
+
+`RecursiveFileWatcher` registers the selected root and each eligible real directory with Java NIO `WatchService`. It applies the same exclusion policy as discovery, never follows directory symbolic links, and registers eligible directories created after startup before publishing their create event. Events contain normalized absolute paths and one of `CREATED`, `MODIFIED`, `DELETED`, or `OVERFLOW`.
+
+Each watch session owns one daemon thread and invokes its observer synchronously, so the application layer does not add an unbounded event queue. Native providers may coalesce, duplicate, reorder, or overflow events; `OVERFLOW` identifies the affected directory and is a repair signal, not a fabricated per-file change. The watcher reports categorized, content-free failures, stops when its root becomes unavailable, and has idempotent bounded shutdown. Index mutation, event coalescing, root lifecycle ownership, and reconciliation are intentionally outside this low-level boundary. See ADR 0014.
+
 ## Data flow
 
 The indexing pipeline is discovery → metadata upsert → bounded extraction queue/workers → same-key content update → commit/progress completion. Lucene's near-real-time reader can expose metadata upserts before slower content extraction and the final durable commit. A full document replacement keeps one entry per normalized path because Lucene does not perform partial field updates.
@@ -33,7 +39,7 @@ During development, Vite proxies relative `/api` traffic to `127.0.0.1:8080`. Th
 
 ## Concurrency
 
-Discovery, extraction, index writing, and search use separate execution boundaries. Content-indexing workers use a fixed pool and bounded queue; when that queue fills, the discovery caller performs extraction work to apply backpressure instead of accumulating paths. The extractor has its own fixed parser pool and bounded queue so parser capacity remains independently enforced.
+Discovery, filesystem watching, extraction, index writing, and search use separate execution boundaries. Watch observers execute on their session's single daemon thread without another queue. Content-indexing workers use a fixed pool and bounded queue; when that queue fills, the discovery caller performs extraction work to apply backpressure instead of accumulating paths. The extractor has its own fixed parser pool and bounded queue so parser capacity remains independently enforced.
 
 ## Content extraction
 

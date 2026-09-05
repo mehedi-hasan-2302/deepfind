@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 3 — Persistence and Index Lifecycle (complete)
+Phase 4 — Incremental Updates and Freshness (in progress)
 
 ## Last completed step
 
-STEP 11 — Persist scan history and recover interrupted indexing jobs.
+STEP 12 — Add recursive filesystem change detection.
 
 ## Completed
 
@@ -55,10 +55,14 @@ STEP 11 — Persist scan history and recover interrupted indexing jobs.
 - Honest interrupted-state UI with restored root and a full restart-to-reconcile action; exact filesystem-cursor resume is not claimed.
 - Bounded, validated `GET /api/index/history` access through API DTOs, limited to 100 recent records per request.
 - Restart, interruption, failure, checkpoint, Unicode history, migration, history API, limit validation, and recovery UI coverage.
+- Recursive Java NIO filesystem watch sessions with normalized create, modify, delete, and overflow events.
+- Existing and newly created directory registration using the discovery exclusion policy without following directory symbolic links.
+- One synchronous daemon event loop per root, no unbounded application queue, categorized safe failures, root-loss detection, and idempotent bounded shutdown.
+- Native watcher integration coverage for nested and Unicode paths, event lifecycles, post-start directory creation, exclusions, validation, and conditional symbolic-link behavior.
 
 ## Current behavior
 
-The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned to reconcile changes. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Automatic file-change tracking is not yet implemented.
+The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned to reconcile changes. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. The backend can now detect recursive filesystem changes, but those events are not yet applied to Lucene, so search results do not update automatically yet.
 
 ## Commands verified
 
@@ -84,14 +88,15 @@ The user can index a local folder and search filenames, paths, and text inside s
 - `npm run check` in `frontend` after STEP 10 — passed; ESLint, 6 Vitest interaction tests (including persisted-root restoration), TypeScript, and Vite production build succeeded.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 11 — passed; 51 tests, package, four-version Flyway migration, restart recovery, history API, and Spotless check succeeded. One host-dependent symlink test was skipped.
 - `npm run check` in `frontend` after STEP 11 — passed; ESLint, 7 Vitest interaction tests (including interrupted-run recovery guidance), TypeScript, and Vite production build succeeded.
+- `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 12 — passed; 59 tests, executable backend JAR packaging, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 
 ## Known failures
 
-No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths, failure descriptions, counters, and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced. Interrupted runs restart as full root reconciliation scans rather than unsafe mid-tree continuation.
+No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. In restricted Windows environments Maven clean/Spotless may need permission to replace the generated `backend\target` tree. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Native watch providers may duplicate, coalesce, reorder, or overflow events; reconciliation must repair uncertainty. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths, failure descriptions, counters, and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced. Interrupted runs restart as full root reconciliation scans rather than unsafe mid-tree continuation.
 
 ## Next recommended step
 
-Begin Phase 4 with a filesystem change watcher for indexed roots, using normalized-path add/update/delete events and preserving periodic reconciliation as the repair mechanism for missed events.
+Connect watcher events to idempotent Lucene add/update/delete operations through a bounded application service, including rename semantics and overflow-triggered reconciliation.
 
 ## Important architectural notes
 
@@ -105,6 +110,7 @@ Begin Phase 4 with a filesystem change watcher for indexed roots, using normaliz
 - Validated, shell-free platform action behavior is documented in ADR 0008.
 - Tika extraction policy and cooperative-timeout tradeoffs are documented in ADR 0009.
 - SQLite owns structured local state under the shared data directory; see ADR 0012. Scan history, checkpointing, and interrupted-run recovery are defined by ADR 0013.
+- Recursive watcher semantics, exclusion behavior, synchronous delivery, and overflow-as-reconciliation-signal are defined by ADR 0014.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
 - Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
 - The desktop shell remains deferred until its owning phase.
