@@ -70,6 +70,10 @@ Incremental indexing uses a fixed event queue of 256 entries and waits up to 30 
 
 Reconciliation begins 30 seconds after startup and then runs at most every 15 minutes by default. It scans metadata but re-extracts content only for new, changed, or previously incomplete files, and removes entries only when their source paths are proven absent. Override the cadence with `deepfind.reconciliation.interval`, `deepfind.reconciliation.initial-delay`, and `deepfind.reconciliation.poll-interval`.
 
+## Search behavior
+
+Ordinary words are required but may occur across indexed filename, path, or content fields. Wrap words in balanced double quotes to require their analyzed order and adjacency, for example `"annual budget report"`. Quoted phrases can be combined with ordinary words. An unmatched quote is treated as ordinary text instead of exposing query-parser errors. Filename matches continue to outrank path and content matches, and content phrase results are labeled **Exact phrase**.
+
 ## Documentation
 
 - [Product requirements](docs/PRODUCT.md)

@@ -23,6 +23,7 @@
 - Automatic reconciliation starts after 30 seconds and normally runs every 15 minutes. It may traverse the full selected tree, but unchanged files are not re-extracted. Use `deepfind.reconciliation.*` settings to adjust the cadence during development; an excessively short interval can create unnecessary filesystem work.
 - **Live updates active** means native changes are being tracked. **Index repair pending** means an event history became uncertain and automatic reconciliation will retry when the indexing worker is free. **Live updates unavailable** means the selected folder could not be watched; restore access and use **Refresh index**, or wait for automatic retry.
 - **Refresh index** reconciles the persisted selected folder and is disabled while another indexing job is running or while the path field differs from that selected folder. Use **Start indexing** after changing the path.
+- Use balanced double quotes for an exact analyzed phrase, such as `"salary expectation"`. If a closing quote is missing, DeepFind intentionally searches the words as ordinary text rather than rejecting the request. Phrase search is lexical and does not yet add synonyms or semantic similarity.
 
 ## Local database issues
 

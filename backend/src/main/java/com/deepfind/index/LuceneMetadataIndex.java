@@ -45,6 +45,7 @@ import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.IOUtils;
+import org.apache.lucene.util.QueryBuilder;
 
 public final class LuceneMetadataIndex implements AutoCloseable {
 
@@ -232,14 +233,18 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         }
 
         try {
-            Query luceneQuery = buildQuery(query);
+            ParsedSearchQuery parsedQuery = ParsedSearchQuery.parse(query);
+            if (parsedQuery.literalText().isEmpty()) {
+                return new MetadataSearchPage(0, List.of());
+            }
+            Query luceneQuery = buildQuery(parsedQuery);
             searcherManager.maybeRefreshBlocking();
             IndexSearcher searcher = searcherManager.acquire();
             try {
                 TopDocs hits = searcher.search(luceneQuery, limit);
                 return new MetadataSearchPage(
                         hits.totalHits == null ? hits.scoreDocs.length : hits.totalHits.value(),
-                        mapResults(searcher, hits.scoreDocs, query));
+                        mapResults(searcher, hits.scoreDocs, query, parsedQuery));
             } finally {
                 searcherManager.release(searcher);
             }
@@ -260,8 +265,8 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         }
     }
 
-    private Query buildQuery(String queryText) {
-        String normalizedQuery = queryText.toLowerCase(Locale.ROOT);
+    private Query buildQuery(ParsedSearchQuery parsedQuery) {
+        String normalizedQuery = parsedQuery.literalText().toLowerCase(Locale.ROOT);
         MultiFieldQueryParser parser = new MultiFieldQueryParser(
                 new String[] {LuceneIndexSchema.FILENAME, LuceneIndexSchema.PATH_TEXT, LuceneIndexSchema.CONTENT},
                 analyzer,
@@ -281,23 +286,58 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         query.add(
                 new BoostQuery(new PrefixQuery(new Term(LuceneIndexSchema.FILENAME_EXACT, normalizedQuery)), 8.0f),
                 BooleanClause.Occur.SHOULD);
-        try {
-            query.add(parser.parse(QueryParser.escape(queryText)), BooleanClause.Occur.SHOULD);
-        } catch (ParseException ignored) {
-            // Exact and prefix clauses preserve plain-text behavior for punctuation-only input.
+        BooleanQuery.Builder required = new BooleanQuery.Builder();
+        boolean hasRequiredClause = false;
+        if (!parsedQuery.unquotedText().isEmpty()) {
+            try {
+                required.add(parser.parse(QueryParser.escape(parsedQuery.unquotedText())), BooleanClause.Occur.MUST);
+                hasRequiredClause = true;
+            } catch (ParseException ignored) {
+                // Exact and prefix clauses preserve plain-text behavior for punctuation-only input.
+            }
+        }
+        for (String phrase : parsedQuery.phrases()) {
+            Query phraseQuery = phraseQuery(phrase);
+            if (phraseQuery != null) {
+                required.add(phraseQuery, BooleanClause.Occur.MUST);
+                hasRequiredClause = true;
+            }
+        }
+        if (hasRequiredClause) {
+            query.add(required.build(), BooleanClause.Occur.SHOULD);
         }
         query.setMinimumNumberShouldMatch(1);
         return query.build();
     }
 
-    private List<MetadataSearchResult> mapResults(IndexSearcher searcher, ScoreDoc[] hits, String queryText)
+    private Query phraseQuery(String phrase) {
+        QueryBuilder builder = new QueryBuilder(analyzer);
+        BooleanQuery.Builder fields = new BooleanQuery.Builder();
+        addPhraseField(fields, builder, LuceneIndexSchema.FILENAME, phrase, 6.0f);
+        addPhraseField(fields, builder, LuceneIndexSchema.PATH_TEXT, phrase, 1.5f);
+        addPhraseField(fields, builder, LuceneIndexSchema.CONTENT, phrase, 1.0f);
+        BooleanQuery query = fields.build();
+        return query.clauses().isEmpty() ? null : query;
+    }
+
+    private static void addPhraseField(
+            BooleanQuery.Builder fields, QueryBuilder builder, String field, String phrase, float boost) {
+        Query fieldQuery = builder.createPhraseQuery(field, phrase);
+        if (fieldQuery != null) {
+            fields.add(new BoostQuery(fieldQuery, boost), BooleanClause.Occur.SHOULD);
+        }
+    }
+
+    private List<MetadataSearchResult> mapResults(
+            IndexSearcher searcher, ScoreDoc[] hits, String queryText, ParsedSearchQuery parsedQuery)
             throws IOException {
         List<MetadataSearchResult> results = new java.util.ArrayList<>(hits.length);
         for (ScoreDoc hit : hits) {
             Document document = searcher.storedFields().document(hit.doc);
             FileMetadata metadata = mapper.fromDocument(document);
-            MetadataMatchType matchType = matchType(metadata, queryText);
+            MetadataMatchType matchType = matchType(metadata, document, parsedQuery);
             SearchSnippet snippet = matchType == MetadataMatchType.CONTENT
+                            || matchType == MetadataMatchType.EXACT_PHRASE
                     ? ContentSnippetGenerator.generate(document.get(LuceneIndexSchema.SNIPPET_SOURCE), queryText)
                             .orElse(null)
                     : null;
@@ -306,8 +346,9 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         return List.copyOf(results);
     }
 
-    private static MetadataMatchType matchType(FileMetadata metadata, String queryText) {
-        String query = queryText.toLowerCase(Locale.ROOT);
+    private static MetadataMatchType matchType(
+            FileMetadata metadata, Document document, ParsedSearchQuery parsedQuery) {
+        String query = parsedQuery.literalText().toLowerCase(Locale.ROOT);
         String filename = metadata.filename().toLowerCase(Locale.ROOT);
         if (filename.equals(query)) {
             return MetadataMatchType.EXACT_FILENAME;
@@ -321,7 +362,19 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         }
         String path = metadata.absolutePath().toString().toLowerCase(Locale.ROOT);
         boolean allTermsInPath = List.of(query.split("\\s+")).stream().allMatch(path::contains);
-        return allTermsInPath ? MetadataMatchType.PATH : MetadataMatchType.CONTENT;
+        if (allTermsInPath) {
+            return MetadataMatchType.PATH;
+        }
+        String content = document.get(LuceneIndexSchema.SNIPPET_SOURCE);
+        if (content != null && parsedQuery.phrases().stream().anyMatch(phrase -> containsPhrase(content, phrase))) {
+            return MetadataMatchType.EXACT_PHRASE;
+        }
+        return MetadataMatchType.CONTENT;
+    }
+
+    private static boolean containsPhrase(String content, String phrase) {
+        String normalizedContent = content.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ");
+        return normalizedContent.contains(phrase.toLowerCase(Locale.ROOT));
     }
 
     private static void validateSchema(Directory directory) throws IOException {

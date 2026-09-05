@@ -131,6 +131,54 @@ class LuceneMetadataIndexTests {
     }
 
     @Test
+    void quotedPhrasesRequireAdjacentTermsAndKeepFilenameRanking() {
+        Path indexPath = temporaryDirectory.resolve("phrase-index");
+        FileMetadata filenameMatch = metadata(temporaryDirectory.resolve("annual-budget-report.txt"), 10);
+        FileMetadata phraseMatch = metadata(temporaryDirectory.resolve("board-minutes.txt"), 20);
+        FileMetadata separatedTerms = metadata(temporaryDirectory.resolve("planning-notes.txt"), 30);
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(indexPath)) {
+            index.upsert(filenameMatch);
+            index.upsertContent(
+                    phraseMatch,
+                    ExtractionResult.success(
+                            new ParsedDocument("The annual budget report is confidential.", "text/plain", false)));
+            index.upsertContent(
+                    separatedTerms,
+                    ExtractionResult.success(new ParsedDocument(
+                            "The annual budget forecast precedes the report.", "text/plain", false)));
+            index.commit();
+
+            assertThat(index.search("\"annual budget report\"", 10))
+                    .extracting(result -> result.metadata().filename())
+                    .containsExactly("annual-budget-report.txt", "board-minutes.txt");
+            assertThat(index.search("\"annual budget report\"", 10).get(1).matchType())
+                    .isEqualTo(MetadataMatchType.EXACT_PHRASE);
+            assertThat(index.search("\"annual budget report\" confidential", 10))
+                    .singleElement()
+                    .extracting(result -> result.metadata().filename())
+                    .isEqualTo("board-minutes.txt");
+        }
+    }
+
+    @Test
+    void unmatchedAndEmptyQuotesFallBackSafely() {
+        Path indexPath = temporaryDirectory.resolve("quote-fallback-index");
+        FileMetadata content = metadata(temporaryDirectory.resolve("notes.txt"), 10);
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(indexPath)) {
+            index.upsertContent(
+                    content,
+                    ExtractionResult.success(new ParsedDocument("annual planning report", "text/plain", false)));
+            index.commit();
+
+            assertThat(index.search("\"annual report", 10))
+                    .singleElement()
+                    .extracting(result -> result.metadata().filename())
+                    .isEqualTo("notes.txt");
+            assertThat(index.search("\"\"", 10)).isEmpty();
+        }
+    }
+
+    @Test
     void emptyQueriesAreSafeAndLimitsAreBounded() {
         try (LuceneMetadataIndex index = new LuceneMetadataIndex(temporaryDirectory.resolve("index"))) {
             assertThat(index.search("   ", 10)).isEmpty();

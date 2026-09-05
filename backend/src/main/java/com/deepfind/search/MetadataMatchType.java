@@ -5,5 +5,6 @@ public enum MetadataMatchType {
     FILENAME_PREFIX,
     FILENAME,
     PATH,
+    EXACT_PHRASE,
     CONTENT
 }

@@ -40,7 +40,7 @@ export interface SearchResult {
   type: 'FILE' | 'DIRECTORY' | 'SYMBOLIC_LINK' | 'OTHER'
   sizeBytes: number
   modifiedAt: string
-  matchType: 'EXACT_FILENAME' | 'FILENAME_PREFIX' | 'FILENAME' | 'PATH' | 'CONTENT'
+  matchType: 'EXACT_FILENAME' | 'FILENAME_PREFIX' | 'FILENAME' | 'PATH' | 'EXACT_PHRASE' | 'CONTENT'
   snippet: SearchSnippet | null
 }
 

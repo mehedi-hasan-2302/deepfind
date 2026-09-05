@@ -203,6 +203,41 @@ describe('App', () => {
     )
   })
 
+  it('explains an exact quoted-phrase result', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString()
+      if (url === '/api/index/status') return jsonResponse(idleStatus)
+      if (url.startsWith('/api/search?')) {
+        return jsonResponse({
+          query: '"annual budget report"',
+          tookMs: 3,
+          totalHits: 1,
+          results: [{
+            path: 'D:\\Archive\\board-minutes.txt',
+            filename: 'board-minutes.txt',
+            extension: 'txt',
+            type: 'FILE',
+            sizeBytes: 512,
+            modifiedAt: '2026-09-01T10:30:00Z',
+            matchType: 'EXACT_PHRASE',
+            snippet: {
+              text: 'The annual budget report was approved.',
+              highlights: [{ start: 4, end: 10 }, { start: 11, end: 17 }, { start: 18, end: 24 }],
+            },
+          }],
+        })
+      }
+      return jsonResponse({}, 404)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: '"annual budget report"' } })
+
+    expect(await screen.findByText('Exact phrase')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'board-minutes.txt' })).toBeInTheDocument()
+  })
+
   it('opens, reveals, and copies paths from a result card', async () => {
     const resultPath = 'D:\\Archive\\Thesis\\final_submission.docx'
     const writeText = vi.fn(async () => undefined)

@@ -157,9 +157,10 @@ function matchLabel(matchType: SearchResult['matchType']) {
   return {
     EXACT_FILENAME: 'Exact filename',
     FILENAME_PREFIX: 'Filename prefix',
-    FILENAME: 'Filename',
-    PATH: 'Folder path',
-    CONTENT: 'Document content',
+      FILENAME: 'Filename',
+      PATH: 'Folder path',
+      EXACT_PHRASE: 'Exact phrase',
+      CONTENT: 'Document content',
   }[matchType]
 }
 

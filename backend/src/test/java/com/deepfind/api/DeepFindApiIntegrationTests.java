@@ -108,6 +108,14 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.results[0].snippet.text").value(containsString("starling")))
                 .andExpect(jsonPath("$.results[0].snippet.highlights[0].start").isNumber())
                 .andExpect(jsonPath("$.results[0].snippet.highlights[0].end").isNumber());
+
+        mockMvc.perform(get("/api/search")
+                        .param("query", "\"internal codename\"")
+                        .param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalHits").value(1))
+                .andExpect(jsonPath("$.results[0].matchType").value("EXACT_PHRASE"))
+                .andExpect(jsonPath("$.results[0].snippet.text").value(containsString("internal codename")));
     }
 
     @Test

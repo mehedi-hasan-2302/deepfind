@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 4 — Incremental Updates and Freshness (complete)
+Phase 5 — Search Quality (in progress)
 
 ## Last completed step
 
-STEP 16 — Expose manual refresh and live freshness status.
+STEP 17 — Add safe explicit phrase search.
 
 ## Completed
 
@@ -80,10 +80,14 @@ STEP 16 — Expose manual refresh and live freshness status.
 - Frontend live-update health polling, clear pause/recovery wording, and a guarded manual **Refresh index** action that cannot target an unsaved path.
 - HTTP, service, error-mapping, and React interaction coverage for refresh, freshness state, job exclusion, and unavailable selection.
 - Phase 4 exit criteria met: create, edit, rename, and delete changes update results automatically, with periodic and explicit reconciliation available when event history is uncertain.
+- Balanced double-quoted phrase parsing with ordinary required terms outside quotes and graceful unmatched-quote fallback.
+- Programmatic positional phrase queries across filename, path, and content without exposing Lucene query operators.
+- Filename-first phrase boosting, a distinct `EXACT_PHRASE` explanation, and safe content snippets/highlights for phrase results.
+- Ranking regressions for adjacent versus separated terms, mixed phrase-and-term input, filename-over-content ordering, empty quotes, malformed quotes, HTTP mapping, and frontend explanation.
 
 ## Current behavior
 
-The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned. The persisted selected root is watched automatically, and ordinary create, content edit, rename, and delete events update search results. Metadata-aware reconciliation runs after startup and periodically, or promptly after explicit watcher uncertainty, without re-extracting unchanged content. The interface displays live-update health and can request immediate refresh of the persisted root. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Reconciliation provides eventual rather than atomic filesystem consistency.
+The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Ordinary multi-term searches require all terms; balanced double quotes request positional phrase matching and malformed quotes fall back safely. Filename phrase results retain priority and content phrase results are explained explicitly. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned. The persisted selected root is watched automatically, and ordinary create, content edit, rename, and delete events update search results. Metadata-aware reconciliation runs after startup and periodically, or promptly after explicit watcher uncertainty, without re-extracting unchanged content. The interface displays live-update health and can request immediate refresh of the persisted root. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Reconciliation provides eventual rather than atomic filesystem consistency.
 
 ## Commands verified
 
@@ -115,6 +119,8 @@ The user can index a local folder and search filenames, paths, and text inside s
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 15 — passed; 72 tests, scheduled metadata reconciliation, single-job exclusion, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 16 — passed; 74 tests, manual refresh and watcher-health API coverage, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `npm run check` in `frontend` after STEP 16 — passed; ESLint, 8 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
+- `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 17 — passed; 76 tests, phrase-query and ranking regressions, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
+- `npm run check` in `frontend` after STEP 17 — passed; ESLint, 9 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 
 ## Known failures
 
@@ -122,7 +128,7 @@ No product failures recorded. Maven is not installed globally, so all backend co
 
 ## Next recommended step
 
-Begin Phase 5 search-quality work with explicit phrase-search semantics and ranking regression coverage before adding filters, fuzzy matching, and pagination.
+Add validated search filters for file type, modified date, and size while preserving phrase semantics and filename-first ranking.
 
 ## Important architectural notes
 
@@ -141,6 +147,7 @@ Begin Phase 5 search-quality work with explicit phrase-search semantics and rank
 - Persisted-root restoration, single active-session ownership, full-scan pause/resume, and shutdown ordering are defined by ADR 0016.
 - Metadata snapshots, changed-only extraction, proven-missing pruning, scheduled repair, and shared job exclusion are defined by ADR 0017.
 - Manual refresh, independent freshness status, stable API errors, and guarded frontend controls are defined by ADR 0018.
+- Balanced-quote parsing, programmatic phrase clauses, ranking weights, fallback behavior, and exact-phrase explanation are defined by ADR 0019.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
 - Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
 - The desktop shell remains deferred until its owning phase.
