@@ -13,6 +13,7 @@ import com.deepfind.filesystem.FileSystemDiscoveryService;
 import com.deepfind.index.IndexWatchLifecycle;
 import com.deepfind.index.LuceneMetadataIndex;
 import com.deepfind.index.MetadataIndexingService;
+import com.deepfind.index.MetadataReconciliationService;
 import com.deepfind.persistence.RootCatalog;
 import com.deepfind.persistence.ScanFailureRecord;
 import com.deepfind.persistence.ScanHistoryRepository;
@@ -73,6 +74,53 @@ class IndexingJobServiceTests {
                         .isEqualTo(root.toAbsolutePath().normalize());
             } finally {
                 discovery.release();
+                jobs.shutdown();
+            }
+        }
+    }
+
+    @Test
+    void scheduledReconciliationUsesTheSameSingleJobLane() throws Exception {
+        Path selectedRoot = java.nio.file.Files.createDirectory(root.resolve("selected"));
+        BlockingDiscoveryService reconciliationDiscovery = new BlockingDiscoveryService();
+        RecordingWatchLifecycle watchLifecycle = new RecordingWatchLifecycle();
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        DeepFindExtractionProperties extractionProperties =
+                new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(1), 1, 2);
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("reconciliation-index"))) {
+            MetadataIndexingService indexing = new MetadataIndexingService(
+                    new FileSystemDiscoveryService(),
+                    index,
+                    path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
+                    extractionProperties);
+            MetadataReconciliationService reconciliation = new MetadataReconciliationService(
+                    reconciliationDiscovery,
+                    index,
+                    path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
+                    extractionProperties);
+            IndexingJobService jobs = new IndexingJobService(
+                    indexing,
+                    reconciliation,
+                    new RecordingRootCatalog(selectedRoot),
+                    new RecordingScanHistory(null),
+                    watchLifecycle,
+                    Clock.fixed(Instant.parse("2026-09-05T09:00:00Z"), ZoneOffset.UTC),
+                    executor);
+            try {
+                assertThat(jobs.reconcileSelectedRootIfIdle()).isTrue();
+                assertThat(reconciliationDiscovery.awaitStarted(Duration.ofSeconds(2)))
+                        .isTrue();
+                assertThat(jobs.reconcileSelectedRootIfIdle()).isFalse();
+                assertThat(watchLifecycle.pauses).isOne();
+
+                reconciliationDiscovery.release();
+                awaitTerminal(jobs, Duration.ofSeconds(2));
+
+                assertThat(jobs.status().state()).isEqualTo(IndexingJobState.COMPLETED);
+                assertThat(watchLifecycle.watchedRoot)
+                        .isEqualTo(selectedRoot.toAbsolutePath().normalize());
+            } finally {
+                reconciliationDiscovery.release();
                 jobs.shutdown();
             }
         }

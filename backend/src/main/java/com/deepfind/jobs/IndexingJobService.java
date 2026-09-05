@@ -9,6 +9,7 @@ import com.deepfind.filesystem.PathNormalizer;
 import com.deepfind.index.IndexWatchLifecycle;
 import com.deepfind.index.MetadataIndexingOutcome;
 import com.deepfind.index.MetadataIndexingService;
+import com.deepfind.index.MetadataReconciliationService;
 import com.deepfind.persistence.RootCatalog;
 import com.deepfind.persistence.ScanHistoryRepository;
 import com.deepfind.persistence.ScanJobMetrics;
@@ -44,6 +45,7 @@ public class IndexingJobService {
             "The previous indexing run was interrupted. Start indexing again to reconcile this folder.";
 
     private final MetadataIndexingService indexingService;
+    private final MetadataReconciliationService reconciliationService;
     private final RootCatalog rootCatalog;
     private final ScanHistoryRepository scanHistory;
     private final IndexWatchLifecycle watchLifecycle;
@@ -56,9 +58,11 @@ public class IndexingJobService {
             MetadataIndexingService indexingService,
             RootCatalog rootCatalog,
             ScanHistoryRepository scanHistory,
-            IndexWatchLifecycle watchLifecycle) {
+            IndexWatchLifecycle watchLifecycle,
+            MetadataReconciliationService reconciliationService) {
         this(
                 indexingService,
+                reconciliationService,
                 rootCatalog,
                 scanHistory,
                 watchLifecycle,
@@ -76,7 +80,7 @@ public class IndexingJobService {
             ScanHistoryRepository scanHistory,
             Clock clock,
             ExecutorService executor) {
-        this(indexingService, rootCatalog, scanHistory, ignoredLifecycle(), clock, executor);
+        this(indexingService, null, rootCatalog, scanHistory, ignoredLifecycle(), clock, executor);
     }
 
     IndexingJobService(
@@ -86,7 +90,19 @@ public class IndexingJobService {
             IndexWatchLifecycle watchLifecycle,
             Clock clock,
             ExecutorService executor) {
+        this(indexingService, null, rootCatalog, scanHistory, watchLifecycle, clock, executor);
+    }
+
+    IndexingJobService(
+            MetadataIndexingService indexingService,
+            MetadataReconciliationService reconciliationService,
+            RootCatalog rootCatalog,
+            ScanHistoryRepository scanHistory,
+            IndexWatchLifecycle watchLifecycle,
+            Clock clock,
+            ExecutorService executor) {
         this.indexingService = Objects.requireNonNull(indexingService, "indexingService must not be null");
+        this.reconciliationService = reconciliationService;
         this.rootCatalog = Objects.requireNonNull(rootCatalog, "rootCatalog must not be null");
         this.scanHistory = Objects.requireNonNull(scanHistory, "scanHistory must not be null");
         this.watchLifecycle = Objects.requireNonNull(watchLifecycle, "watchLifecycle must not be null");
@@ -110,14 +126,32 @@ public class IndexingJobService {
             throw new IndexRootNotAccessibleException("DeepFind cannot read this folder.");
         }
 
-        var startedAt = clock.instant();
-        rootCatalog.rememberSelected(root, startedAt);
+        return schedule(root, true, false);
+    }
+
+    public synchronized boolean reconcileSelectedRootIfIdle() {
+        if (status.get().state() == IndexingJobState.RUNNING || reconciliationService == null) {
+            return false;
+        }
+        Path root = rootCatalog.lastSelectedRoot().orElse(null);
+        if (root == null || !Files.isDirectory(root) || !Files.isReadable(root)) {
+            return false;
+        }
+        schedule(PathNormalizer.absolute(root), false, true);
+        return true;
+    }
+
+    private IndexingJobStatus schedule(Path root, boolean rememberSelection, boolean reconciliation) {
+        Instant startedAt = clock.instant();
+        if (rememberSelection) {
+            rootCatalog.rememberSelected(root, startedAt);
+        }
         UUID jobId = UUID.randomUUID();
         scanHistory.start(jobId, root, startedAt);
         watchLifecycle.pause();
         IndexingJobStatus started = IndexingJobStatus.running(jobId, root, startedAt);
         status.set(started);
-        executor.submit(() -> run(started));
+        executor.submit(() -> run(started, reconciliation));
         return started;
     }
 
@@ -131,53 +165,52 @@ public class IndexingJobService {
                 .toList();
     }
 
-    private void run(IndexingJobStatus started) {
+    private void run(IndexingJobStatus started, boolean reconciliation) {
         AtomicLong indexed = new AtomicLong();
         AtomicLong lastCheckpointEntries = new AtomicLong();
         AtomicReference<Instant> lastCheckpointAt = new AtomicReference<>(started.startedAt());
         try {
-            MetadataIndexingOutcome outcome =
-                    indexingService.indexRoot(started.root(), ExclusionPolicy.defaults(), new DiscoveryObserver() {
-                        @Override
-                        public void onEntry(FileMetadata metadata) {
-                            indexed.incrementAndGet();
-                        }
+            DiscoveryObserver observer = new DiscoveryObserver() {
+                @Override
+                public void onEntry(FileMetadata metadata) {
+                    indexed.incrementAndGet();
+                }
 
-                        @Override
-                        public void onFailure(DiscoveryFailure failure) {
-                            status.updateAndGet(current -> current.withFailure(failure));
-                            scanHistory.recordFailure(
-                                    started.jobId(),
-                                    failure.path(),
-                                    failure.reason().name(),
-                                    failure.message(),
-                                    clock.instant());
-                        }
+                @Override
+                public void onFailure(DiscoveryFailure failure) {
+                    status.updateAndGet(current -> current.withFailure(failure));
+                    scanHistory.recordFailure(
+                            started.jobId(),
+                            failure.path(),
+                            failure.reason().name(),
+                            failure.message(),
+                            clock.instant());
+                }
 
-                        @Override
-                        public void onProgress(DiscoveryProgress progress) {
-                            long indexedEntries = indexed.get();
-                            status.updateAndGet(current -> current.withProgress(progress, indexedEntries));
-                            Instant now = clock.instant();
-                            if (shouldCheckpoint(
-                                    progress.entriesDiscovered(),
-                                    lastCheckpointEntries.get(),
-                                    now,
-                                    lastCheckpointAt.get())) {
-                                scanHistory.checkpoint(
-                                        started.jobId(), progress.currentPath(), metrics(progress, indexedEntries));
-                                lastCheckpointEntries.set(progress.entriesDiscovered());
-                                lastCheckpointAt.set(now);
-                            }
-                        }
-                    });
+                @Override
+                public void onProgress(DiscoveryProgress progress) {
+                    long indexedEntries = indexed.get();
+                    status.updateAndGet(current -> current.withProgress(progress, indexedEntries));
+                    Instant now = clock.instant();
+                    if (shouldCheckpoint(
+                            progress.entriesDiscovered(), lastCheckpointEntries.get(), now, lastCheckpointAt.get())) {
+                        scanHistory.checkpoint(
+                                started.jobId(), progress.currentPath(), metrics(progress, indexedEntries));
+                        lastCheckpointEntries.set(progress.entriesDiscovered());
+                        lastCheckpointAt.set(now);
+                    }
+                }
+            };
+            MetadataIndexingOutcome outcome = reconciliation
+                    ? reconciliationService.reconcileRoot(started.root(), ExclusionPolicy.defaults(), observer)
+                    : indexingService.indexRoot(started.root(), ExclusionPolicy.defaults(), observer);
             var finishedAt = clock.instant();
             rootCatalog.markIndexed(started.root(), finishedAt);
             scanHistory.finish(started.jobId(), ScanJobState.COMPLETED, metrics(outcome), null, finishedAt);
             status.updateAndGet(current -> current.completed(outcome, finishedAt));
         } catch (RuntimeException exception) {
             Instant failedAt = clock.instant();
-            IndexingJobStatus failed = status.updateAndGet(current -> current.failed(FAILED_MESSAGE, failedAt));
+            IndexingJobStatus failed = status.get().failed(FAILED_MESSAGE, failedAt);
             LOGGER.error(
                     "Indexing job {} failed with {}.",
                     started.jobId(),
@@ -189,6 +222,8 @@ public class IndexingJobService {
                         "Indexing job {} failure state could not be persisted: {}.",
                         started.jobId(),
                         persistenceException.getClass().getSimpleName());
+            } finally {
+                status.set(failed);
             }
         } finally {
             try {

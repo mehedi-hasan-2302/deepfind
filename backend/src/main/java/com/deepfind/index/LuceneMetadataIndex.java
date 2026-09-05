@@ -1,6 +1,7 @@
 package com.deepfind.index;
 
 import com.deepfind.extraction.ExtractionResult;
+import com.deepfind.filesystem.ExclusionPolicy;
 import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.PathNormalizer;
 import com.deepfind.search.ContentSnippetGenerator;
@@ -10,12 +11,15 @@ import com.deepfind.search.MetadataSearchResult;
 import com.deepfind.search.SearchSnippet;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.document.Document;
@@ -129,6 +133,62 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         } catch (IOException exception) {
             throw new IndexAccessException("DeepFind could not delete a tree from the local search index.", exception);
         }
+    }
+
+    public MetadataIndexSnapshot openMetadataSnapshot() {
+        ensureOpen();
+        try {
+            searcherManager.maybeRefreshBlocking();
+            return new LuceneMetadataSnapshot(searcherManager.acquire());
+        } catch (IOException exception) {
+            throw new IndexAccessException("DeepFind could not open an index metadata snapshot.", exception);
+        }
+    }
+
+    public long deleteProvenMissingUnderRoot(Path root, ExclusionPolicy exclusions) {
+        ensureOpen();
+        Path absoluteRoot = PathNormalizer.absolute(root);
+        Objects.requireNonNull(exclusions, "exclusions must not be null");
+        String rootKey = PathNormalizer.searchKey(absoluteRoot);
+        String descendantPrefix = rootKey.endsWith(File.separator) ? rootKey : rootKey + File.separator;
+        Query scope = pathScope(rootKey, descendantPrefix);
+        long deleted = 0;
+        try {
+            searcherManager.maybeRefreshBlocking();
+            IndexSearcher searcher = searcherManager.acquire();
+            try {
+                ScoreDoc after = null;
+                while (true) {
+                    TopDocs page = searcher.searchAfter(after, scope, 512);
+                    if (page.scoreDocs.length == 0) {
+                        break;
+                    }
+                    for (ScoreDoc hit : page.scoreDocs) {
+                        Document document = searcher.storedFields().document(hit.doc);
+                        FileMetadata metadata = mapper.fromDocument(document);
+                        if (exclusions.excludes(absoluteRoot, metadata.absolutePath())
+                                || Files.notExists(metadata.absolutePath(), LinkOption.NOFOLLOW_LINKS)) {
+                            writer.deleteDocuments(new Term(LuceneIndexSchema.PATH_KEY, metadata.normalizedPath()));
+                            deleted++;
+                        }
+                    }
+                    after = page.scoreDocs[page.scoreDocs.length - 1];
+                }
+            } finally {
+                searcherManager.release(searcher);
+            }
+            return deleted;
+        } catch (IOException exception) {
+            throw new IndexAccessException("DeepFind could not reconcile missing index entries.", exception);
+        }
+    }
+
+    private static Query pathScope(String rootKey, String descendantPrefix) {
+        BooleanQuery.Builder scope = new BooleanQuery.Builder();
+        scope.add(new TermQuery(new Term(LuceneIndexSchema.PATH_KEY, rootKey)), BooleanClause.Occur.SHOULD);
+        scope.add(new PrefixQuery(new Term(LuceneIndexSchema.PATH_KEY, descendantPrefix)), BooleanClause.Occur.SHOULD);
+        scope.setMinimumNumberShouldMatch(1);
+        return scope.build();
     }
 
     public void commit() {
@@ -278,6 +338,48 @@ public final class LuceneMetadataIndex implements AutoCloseable {
     private void ensureOpen() {
         if (closed.get()) {
             throw new IllegalStateException("Lucene metadata index is closed.");
+        }
+    }
+
+    private final class LuceneMetadataSnapshot implements MetadataIndexSnapshot {
+
+        private final IndexSearcher searcher;
+        private final AtomicBoolean released = new AtomicBoolean();
+
+        private LuceneMetadataSnapshot(IndexSearcher searcher) {
+            this.searcher = searcher;
+        }
+
+        @Override
+        public Optional<MetadataIndexEntry> find(Path path) {
+            if (released.get()) {
+                throw new IllegalStateException("Index metadata snapshot is closed.");
+            }
+            try {
+                TopDocs hits = searcher.search(
+                        new TermQuery(new Term(LuceneIndexSchema.PATH_KEY, PathNormalizer.searchKey(path))), 1);
+                if (hits.scoreDocs.length == 0) {
+                    return Optional.empty();
+                }
+                Document document = searcher.storedFields().document(hits.scoreDocs[0].doc);
+                return Optional.of(new MetadataIndexEntry(
+                        mapper.fromDocument(document),
+                        !"NOT_ATTEMPTED".equals(document.get(LuceneIndexSchema.EXTRACTION_STATUS))));
+            } catch (IOException exception) {
+                throw new IndexAccessException("DeepFind could not read an index metadata snapshot.", exception);
+            }
+        }
+
+        @Override
+        public void close() {
+            if (!released.compareAndSet(false, true)) {
+                return;
+            }
+            try {
+                searcherManager.release(searcher);
+            } catch (IOException exception) {
+                throw new IndexAccessException("DeepFind could not close an index metadata snapshot.", exception);
+            }
         }
     }
 }

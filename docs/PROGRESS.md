@@ -6,7 +6,7 @@ Phase 4 — Incremental Updates and Freshness (in progress)
 
 ## Last completed step
 
-STEP 14 — Coordinate selected-root watcher lifecycle.
+STEP 15 — Reconcile stale filesystem state automatically.
 
 ## Completed
 
@@ -69,10 +69,16 @@ STEP 14 — Coordinate selected-root watcher lifecycle.
 - Root-switch and application-shutdown ordering that closes old producers before consumers and consumers before Lucene dependencies.
 - Safe internal stopped, watching, reconciliation-required, and failed states without making an unavailable persisted folder fatal to startup.
 - Native end-to-end coverage proving post-start create, content edit, and delete operations update search results, plus root-switch and unavailable-root behavior.
+- Read-only Lucene metadata snapshots for exact path comparison without loading the indexed tree into application memory.
+- Metadata-aware reconciliation that preserves unchanged content, re-extracts new, changed, or incomplete files, and prunes only paths proven missing or newly excluded.
+- Configurable scheduled repair after startup, every 15 minutes by default, with prompt retry for explicit watcher uncertainty.
+- Shared single-job scheduling, durable history, and watcher pause/resume coordination so reconciliation never overlaps a full indexing job.
+- Reconciliation coverage for unchanged-content preservation, new/changed/deleted paths, incomplete extraction recovery, path-prefix boundaries, uncertainty scheduling, and job-lane exclusion.
+- Terminal failure publication now follows the durable history write attempt, preventing a transient terminal-status/history inconsistency.
 
 ## Current behavior
 
-The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned. The persisted selected root is watched automatically, and ordinary create, content edit, rename, and delete events update search results. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Native overflow and the full-scan watch gap are detected or documented uncertainty but do not yet trigger automatic reconciliation; watcher status is not yet exposed in the UI.
+The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. After an interrupted run, existing committed results remain searchable and the restored folder can be fully rescanned. The persisted selected root is watched automatically, and ordinary create, content edit, rename, and delete events update search results. Metadata-aware reconciliation runs after startup and periodically, or promptly after explicit watcher uncertainty, without re-extracting unchanged content. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Reconciliation provides eventual rather than atomic filesystem consistency; manual refresh and watcher status are not yet exposed in the UI.
 
 ## Commands verified
 
@@ -101,14 +107,15 @@ The user can index a local folder and search filenames, paths, and text inside s
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 12 — passed; 59 tests, executable backend JAR packaging, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 13 — passed; 64 tests, executable backend JAR packaging, Spring configuration binding, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 14 — passed; 67 tests, native end-to-end freshness, job lifecycle integration, executable backend JAR packaging, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
+- `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 15 — passed; 72 tests, scheduled metadata reconciliation, single-job exclusion, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 
 ## Known failures
 
-No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. In restricted Windows environments Maven clean/Spotless may need permission to replace the generated `backend\target` tree. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Native watch providers may duplicate, coalesce, reorder, or overflow events; reconciliation must repair uncertainty. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths, failure descriptions, counters, and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced. Interrupted runs restart as full root reconciliation scans rather than unsafe mid-tree continuation.
+No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. In restricted Windows environments Maven clean/Spotless may need permission to replace the generated `backend\target` tree. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Native watch providers may duplicate, coalesce, reorder, or overflow events; scheduled reconciliation repairs uncertainty eventually, not as an atomic snapshot. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths, failure descriptions, counters, and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced. Interrupted runs restart as full root reconciliation scans rather than unsafe mid-tree continuation.
 
 ## Next recommended step
 
-Add automatic reconciliation for watcher uncertainty and the full-scan observation gap, without overlapping full indexing jobs; then expose a manual refresh action.
+Expose manual refresh plus watcher/reconciliation status through the loopback API and UI, completing the remaining Phase 4 recovery controls.
 
 ## Important architectural notes
 
@@ -125,6 +132,7 @@ Add automatic reconciliation for watcher uncertainty and the full-scan observati
 - Recursive watcher semantics, exclusion behavior, synchronous delivery, and overflow-as-reconciliation-signal are defined by ADR 0014.
 - Bounded ordered event application, recursive directory creation, subtree deletion, rename semantics, and reconciliation triggers are defined by ADR 0015.
 - Persisted-root restoration, single active-session ownership, full-scan pause/resume, and shutdown ordering are defined by ADR 0016.
+- Metadata snapshots, changed-only extraction, proven-missing pruning, scheduled repair, and shared job exclusion are defined by ADR 0017.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
 - Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
 - The desktop shell remains deferred until its owning phase.

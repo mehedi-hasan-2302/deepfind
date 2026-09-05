@@ -18,8 +18,9 @@
 - Unsupported, oversized, unreadable, disguised, or malformed documents remain filename/path searchable when their metadata can be read, but their contents are not searchable.
 - Content extraction defaults to 20 MiB, 500,000 characters, and 15 seconds per file. Review `deepfind.extraction.*` settings if a legitimate local document is skipped.
 - Scanned/image-only PDFs require future local OCR support and normally provide no searchable text today.
-- Filesystem watcher tests use the host's native Java watch provider. Symbolic-link coverage is skipped when the current Windows account cannot create links. The watcher exposes provider overflow as a reconciliation signal; automatic index repair is part of the remaining Phase 4 work.
-- Incremental event buffering defaults to 256 entries. If diagnostics later show sustained watcher overflow on a very active tree, increasing `deepfind.watcher.queue-capacity` can absorb a larger burst but uses more memory; reconciliation is still required for correctness.
+- Filesystem watcher tests use the host's native Java watch provider. Symbolic-link coverage is skipped when the current Windows account cannot create links. Provider overflow requests automatic reconciliation; the scheduler retries once the single indexing worker is idle.
+- Incremental event buffering defaults to 256 entries. If diagnostics later show sustained watcher overflow on a very active tree, increasing `deepfind.watcher.queue-capacity` can absorb a larger burst but uses more memory; automatic reconciliation remains the correctness backstop.
+- Automatic reconciliation starts after 30 seconds and normally runs every 15 minutes. It may traverse the full selected tree, but unchanged files are not re-extracted. Use `deepfind.reconciliation.*` settings to adjust the cadence during development; an excessively short interval can create unnecessary filesystem work.
 
 ## Local database issues
 

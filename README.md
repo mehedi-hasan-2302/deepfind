@@ -2,7 +2,7 @@
 
 > You remember what was in the file. DeepFind finds where you put it.
 
-DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–3 are complete, and Phase 4 is underway.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor indexing, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface. The selected root is now watched automatically, so ordinary create, edit, rename, and delete activity updates Lucene after indexing. Reconciliation and manual refresh remain in progress.
+DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–3 are complete, and Phase 4 is underway.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor indexing, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface. The selected root is watched automatically, so ordinary create, edit, rename, and delete activity updates Lucene after indexing. Periodic metadata-aware reconciliation repairs missed events and proven deletions; manual refresh and watcher-status controls remain in progress.
 
 ## Privacy baseline
 
@@ -67,6 +67,8 @@ Local data defaults to `${user.home}/.deepfind`. Lucene keeps the search index u
 Extracted text is indexed into local Lucene postings. An extraction-bounded stored copy supports snippets; search responses return only a short excerpt of at most 240 content characters plus boundary ellipses. Extraction defaults are a 20 MiB file limit, 500,000 extracted characters, a 15-second deadline, two workers, and a queue capacity of 32. Override them with the `deepfind.extraction.*` Spring properties when developing or packaging.
 
 Incremental indexing uses a fixed event queue of 256 entries and waits up to 30 seconds for graceful shutdown. Override these development defaults with `deepfind.watcher.queue-capacity` and `deepfind.watcher.shutdown-timeout`. When the queue is full, the watcher producer waits instead of allocating an unbounded backlog.
+
+Reconciliation begins 30 seconds after startup and then runs at most every 15 minutes by default. It scans metadata but re-extracts content only for new, changed, or previously incomplete files, and removes entries only when their source paths are proven absent. Override the cadence with `deepfind.reconciliation.interval`, `deepfind.reconciliation.initial-delay`, and `deepfind.reconciliation.poll-interval`.
 
 ## Documentation
 

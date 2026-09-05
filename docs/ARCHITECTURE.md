@@ -2,7 +2,7 @@
 
 ## Status
 
-Phases 1–3 provide an end-to-end local search slice with durable index, root configuration, scan history, and interrupted-run detection. Phase 4 now has automatic selected-root watching and bounded incremental Lucene updates. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, guarded platform file actions, event application, and watcher lifecycle coordination are implemented. Reconciliation, manual refresh, watcher-status UX, and desktop packaging remain pending.
+Phases 1–3 provide an end-to-end local search slice with durable index, root configuration, scan history, and interrupted-run detection. Phase 4 now has automatic selected-root watching, bounded incremental Lucene updates, and scheduled metadata-aware reconciliation. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, guarded platform file actions, event application, watcher lifecycle coordination, and automatic repair are implemented. Manual refresh, watcher-status UX, and desktop packaging remain pending.
 
 ## Components
 
@@ -35,11 +35,13 @@ Create and modify events re-read no-follow metadata; regular files are re-extrac
 
 `IndexWatchCoordinator` owns the active native and incremental sessions. At startup it restores the persisted selected root without making an unavailable folder fatal to application startup. Selecting and fully indexing a root stops the native session first, drains its accepted incremental work, runs the full scan, and resumes watching in a `finally` path after success or failure. Switching roots closes the old pair before opening the new pair. Application shutdown closes the watcher before draining and closing the incremental session, which remains upstream of Lucene destruction.
 
-Pausing during a full scan prevents unordered watcher mutations from racing the traversal, but it introduces a window in which a change can occur after its path was visited and before watching resumes. The next reconciliation module must repair that window and all native overflow uncertainty. See ADR 0016.
+Pausing during a full scan prevents unordered watcher mutations from racing the traversal, but it introduces a window in which a change can occur after its path was visited and before watching resumes. Scheduled reconciliation repairs this gap eventually. It also runs promptly after the watcher reports uncertainty, subject to the shared indexing worker becoming idle.
+
+`MetadataReconciliationService` compares each discovered entry with a read-only Lucene metadata snapshot. It preserves unchanged documents, re-extracts only new, changed, or never-attempted regular files, and deletes scoped entries only when Java can prove the source path absent with no-follow semantics. Unknown or unreadable existence is preserved rather than guessed deleted. `ReconciliationScheduler` polls every 30 seconds, starts a repair immediately for reconciliation-required watcher state, and otherwise enforces a 15-minute cadence. Reconciliation uses the same single-job lane, durable scan history, and watcher pause/resume boundary as a full scan, so the two never overlap. See ADR 0017.
 
 ## Data flow
 
-The full indexing pipeline is discovery → metadata upsert → bounded extraction queue/workers → same-key content update → commit/progress completion. The incremental pipeline is watcher event → bounded per-root queue → coalesced serial application → metadata/content replacement or subtree delete → burst commit. Lucene's near-real-time reader can expose metadata upserts before slower content extraction and the final durable commit. A full document replacement keeps one entry per normalized path because Lucene does not perform partial field updates.
+The full indexing pipeline is discovery → metadata upsert → bounded extraction queue/workers → same-key content update → commit/progress completion. The incremental pipeline is watcher event → bounded per-root queue → coalesced serial application → metadata/content replacement or subtree delete → burst commit. Reconciliation is metadata snapshot → discovery comparison → changed-only metadata/content replacement → proven-missing pruning → commit. Lucene's near-real-time reader can expose metadata upserts before slower content extraction and the final durable commit. A full document replacement keeps one entry per normalized path because Lucene does not perform partial field updates.
 
 The search pipeline is React's debounced query state → relative `/api/search` request → normalization → Lucene query → filename-first ranking → explanatory match category → bounded plain-text snippet with highlight offsets → API DTO → safely rendered result card. Filters remain a future extension.
 
