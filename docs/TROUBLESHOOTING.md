@@ -23,3 +23,4 @@
 
 - If startup reports a Flyway migration validation error, do not delete the database. Stop DeepFind, copy `<data-directory>\deepfind.db` and any adjacent `-wal`/`-shm` files as a backup, then use a build compatible with that database or investigate the migration checksum change.
 - If startup reports SQLite corruption, DeepFind intentionally leaves the file in place. Stop the application and preserve `<data-directory>\deepfind.db` before attempting recovery. Moving only that database aside creates fresh settings on the next start but loses saved-root records and timestamps; it does not remove the Lucene index or any source files.
+- If the interface reports that the previous indexing run was interrupted, existing committed search results remain usable. Select **Start indexing** again to perform a full reconciliation scan of the restored folder. DeepFind does not claim to resume from the exact interrupted filesystem position yet.

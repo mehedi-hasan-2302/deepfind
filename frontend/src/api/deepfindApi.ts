@@ -1,4 +1,4 @@
-export type IndexJobState = 'IDLE' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+export type IndexJobState = 'IDLE' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'INTERRUPTED'
 
 export interface IndexFailure {
   path: string

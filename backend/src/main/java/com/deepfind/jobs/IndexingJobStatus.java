@@ -1,8 +1,11 @@
 package com.deepfind.jobs;
 
 import com.deepfind.filesystem.DiscoveryFailure;
+import com.deepfind.filesystem.DiscoveryFailureReason;
 import com.deepfind.filesystem.DiscoveryProgress;
 import com.deepfind.index.MetadataIndexingOutcome;
+import com.deepfind.persistence.ScanFailureRecord;
+import com.deepfind.persistence.ScanJobRecord;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.UUID;
@@ -37,6 +40,27 @@ public record IndexingJobStatus(
     static IndexingJobStatus running(UUID jobId, Path root, Instant startedAt) {
         return new IndexingJobStatus(
                 jobId, IndexingJobState.RUNNING, root, root, 0, 0, 0, 0, 0, 0, 0, 0, null, null, startedAt, null);
+    }
+
+    static IndexingJobStatus fromRecord(ScanJobRecord record) {
+        var metrics = record.metrics();
+        return new IndexingJobStatus(
+                record.jobId(),
+                IndexingJobState.valueOf(record.state().name()),
+                record.root(),
+                record.currentPath(),
+                metrics.entriesDiscovered(),
+                metrics.filesDiscovered(),
+                metrics.directoriesDiscovered(),
+                metrics.symbolicLinksDiscovered(),
+                metrics.otherEntriesDiscovered(),
+                metrics.entriesSkipped(),
+                metrics.failures(),
+                metrics.entriesIndexed(),
+                toDiscoveryFailure(record.lastFailure()),
+                record.errorMessage(),
+                record.startedAt(),
+                record.finishedAt());
     }
 
     IndexingJobStatus withProgress(DiscoveryProgress progress, long indexed) {
@@ -118,5 +142,18 @@ public record IndexingJobStatus(
                 message,
                 startedAt,
                 failedAt);
+    }
+
+    private static DiscoveryFailure toDiscoveryFailure(ScanFailureRecord failure) {
+        if (failure == null) {
+            return null;
+        }
+        DiscoveryFailureReason reason;
+        try {
+            reason = DiscoveryFailureReason.valueOf(failure.reason());
+        } catch (IllegalArgumentException exception) {
+            reason = DiscoveryFailureReason.IO_ERROR;
+        }
+        return new DiscoveryFailure(failure.path(), reason, failure.message());
     }
 }

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.FlywayException;
@@ -39,6 +40,8 @@ class SqlitePersistenceIntegrationTests {
 
         assertThat(tableCount(jdbc, "indexed_roots")).isOne();
         assertThat(tableCount(jdbc, "application_settings")).isOne();
+        assertThat(tableCount(jdbc, "scan_jobs")).isOne();
+        assertThat(tableCount(jdbc, "scan_failures")).isOne();
     }
 
     @Test
@@ -79,6 +82,45 @@ class SqlitePersistenceIntegrationTests {
 
         assertThatThrownBy(() -> migrate(dataSource(database))).isInstanceOf(FlywayException.class);
         assertThat(Files.readString(database)).isEqualTo("this is not a SQLite database");
+    }
+
+    @Test
+    void persistsHistoryFailuresAndRecoversAnInterruptedScan() {
+        Path database = temporaryDirectory.resolve("history.db");
+        DataSource dataSource = dataSource(database);
+        migrate(dataSource);
+        JdbcClient jdbc = JdbcClient.create(dataSource);
+        Path root = temporaryDirectory.resolve("কাজ/資料").toAbsolutePath().normalize();
+        Instant selectedAt = Instant.parse("2026-09-05T01:00:00Z");
+        catalog(jdbc).rememberSelected(root, selectedAt);
+        UUID jobId = UUID.randomUUID();
+        SqliteScanHistoryRepository history = new SqliteScanHistoryRepository(jdbc);
+        history.start(jobId, root, selectedAt);
+        ScanJobMetrics checkpoint = new ScanJobMetrics(250, 200, 45, 3, 2, 4, 1, 225);
+        history.checkpoint(jobId, root.resolve("partial"), checkpoint);
+        history.recordFailure(
+                jobId,
+                root.resolve("locked"),
+                "PERMISSION_DENIED",
+                "DeepFind could not read this path.",
+                Instant.parse("2026-09-05T01:01:00Z"));
+
+        SqliteScanHistoryRepository restarted =
+                new SqliteScanHistoryRepository(JdbcClient.create(dataSource(database)));
+        Instant interruptedAt = Instant.parse("2026-09-05T01:02:00Z");
+        ScanJobRecord recovered = restarted
+                .interruptRunningJobs(interruptedAt, "The previous indexing run was interrupted.")
+                .orElseThrow();
+
+        assertThat(recovered.jobId()).isEqualTo(jobId);
+        assertThat(recovered.root()).isEqualTo(root);
+        assertThat(recovered.state()).isEqualTo(ScanJobState.INTERRUPTED);
+        assertThat(recovered.metrics()).isEqualTo(checkpoint);
+        assertThat(recovered.lastFailure().reason()).isEqualTo("PERMISSION_DENIED");
+        assertThat(recovered.finishedAt()).isEqualTo(interruptedAt);
+        assertThat(restarted.interruptRunningJobs(interruptedAt.plusSeconds(1), "again"))
+                .isEmpty();
+        assertThat(restarted.findRecent(20)).containsExactly(recovered);
     }
 
     private static PersistentRootCatalog catalog(JdbcClient jdbc) {

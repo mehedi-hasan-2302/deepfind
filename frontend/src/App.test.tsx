@@ -50,6 +50,26 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /start indexing/i })).toBeEnabled()
   })
 
+  it('explains that an interrupted scan can be restarted', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
+      ...idleStatus,
+      jobId: 'interrupted-job',
+      state: 'INTERRUPTED',
+      root: 'D:\\Archive',
+      entriesDiscovered: 250,
+      entriesIndexed: 225,
+      errorMessage: 'The previous indexing run was interrupted. Start indexing again to reconcile this folder.',
+      startedAt: '2026-09-05T01:00:00Z',
+      finishedAt: '2026-09-05T01:02:00Z',
+    })))
+
+    render(<App />)
+
+    expect(await screen.findByText('Interrupted')).toBeInTheDocument()
+    expect(screen.getByText(/start indexing again to reconcile/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /start indexing/i })).toBeEnabled()
+  })
+
   it('starts indexing and polls until the index is ready', async () => {
     const runningStatus: IndexStatus = {
       ...idleStatus,

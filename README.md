@@ -2,7 +2,7 @@
 
 > You remember what was in the file. DeepFind finds where you put it.
 
-DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phase 2: Content Extraction is complete, and Phase 3 persistence is underway.** Users can select a local folder by path, retain that selection across restarts, monitor indexing, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface.
+DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–3 are complete.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor indexing, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface.
 
 ## Privacy baseline
 
@@ -62,7 +62,7 @@ Desktop packaging is intentionally deferred to Phase 8. The production goal is o
 
 ## Local data
 
-Local data defaults to `${user.home}/.deepfind`. Lucene keeps the search index under `index`, while SQLite keeps indexed-root records and application settings in `deepfind.db` (with transient `deepfind.db-wal` and `deepfind.db-shm` files possible while running). Set `DEEPFIND_DATA_DIRECTORY` to override the shared parent directory. Flyway applies explicit database migrations at startup; a migration or corruption error stops startup instead of silently replacing local state.
+Local data defaults to `${user.home}/.deepfind`. Lucene keeps the search index under `index`, while SQLite keeps indexed-root records, application settings, scan history, progress checkpoints, and categorized scan failures in `deepfind.db` (with transient `deepfind.db-wal` and `deepfind.db-shm` files possible while running). Set `DEEPFIND_DATA_DIRECTORY` to override the shared parent directory. Flyway applies explicit database migrations at startup; a migration or corruption error stops startup instead of silently replacing local state.
 
 Extracted text is indexed into local Lucene postings. An extraction-bounded stored copy supports snippets; search responses return only a short excerpt of at most 240 content characters plus boundary ellipses. Extraction defaults are a 20 MiB file limit, 500,000 extracted characters, a 15-second deadline, two workers, and a queue capacity of 32. Override them with the `deepfind.extraction.*` Spring properties when developing or packaging.
 

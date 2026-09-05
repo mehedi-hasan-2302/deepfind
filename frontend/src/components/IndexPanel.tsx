@@ -87,6 +87,7 @@ function statusLabel(status: IndexStatus | null) {
     RUNNING: 'Indexing',
     COMPLETED: 'Ready',
     FAILED: 'Needs attention',
+    INTERRUPTED: 'Interrupted',
   }[status.state]
 }
 
@@ -94,6 +95,8 @@ function statusSummary(status: IndexStatus | null) {
   if (!status) return 'Connecting to the local search service…'
   if (status.state === 'IDLE') return 'Choose a folder to make its filenames and paths searchable.'
   if (status.state === 'RUNNING') return 'Indexing is in progress. Search results may still be incomplete.'
-  if (status.state === 'FAILED') return status.errorMessage ?? 'Indexing stopped before it could finish.'
+  if (status.state === 'FAILED' || status.state === 'INTERRUPTED') {
+    return status.errorMessage ?? 'Indexing stopped before it could finish.'
+  }
   return `${status.entriesIndexed.toLocaleString()} entries are ready to search.`
 }

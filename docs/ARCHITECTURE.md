@@ -2,7 +2,7 @@
 
 ## Status
 
-Phases 1 and 2 provide an end-to-end local search slice, and Phase 3 has begun with durable indexed-root and settings storage. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, and guarded platform file actions are implemented. Persistent job history and desktop packaging remain deferred.
+Phases 1–3 provide an end-to-end local search slice with durable index, root configuration, scan history, and interrupted-run detection. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, highlighted content snippets, a loopback API, a React interface, and guarded platform file actions are implemented. Automatic filesystem change tracking and desktop packaging remain deferred.
 
 ## Components
 
@@ -46,7 +46,7 @@ The current timeout uses interruption of an in-process parser worker. It bounds 
 ## Storage roles
 
 - Lucene: authoritative full-text index for filename, path, metadata, and extracted content.
-- SQLite: indexed roots and settings today; exclusions, jobs, histories, and failure records are future extensions.
+- SQLite: indexed roots, settings, scan jobs, progress checkpoints, and categorized scan failures. Exclusions remain a future extension.
 - Filesystem: read-only source data. DeepFind does not modify indexed files.
 
 ## Security boundary
@@ -57,7 +57,9 @@ The backend binds to `127.0.0.1`, never `0.0.0.0`, by default. The initial healt
 
 Spring owns one Lucene index lifecycle and closes it on shutdown. The index defaults to `${user.home}/.deepfind/index`; `DEEPFIND_DATA_DIRECTORY` overrides the shared parent data directory for packaging and tests. A SQLite database at `<data-directory>/deepfind.db` stores normalized indexed-root records and generic application settings. Flyway migrates it before persistence-backed services initialize. SQLite foreign keys, a five-second busy timeout, write-ahead logging, and normal synchronous mode are configured on each connection. Startup fails on invalid migrations or database corruption instead of deleting state.
 
-Selecting a valid indexing root transactionally upserts its normalized record and the `last_selected_root` setting before the background job starts. Successful completion records `last_indexed_at`. On restart, the job service exposes the last selected root in its idle status, which lets the existing frontend restore the folder input without a new endpoint. Scan history and interrupted-job recovery are deliberately deferred. See ADR 0012.
+Selecting a valid indexing root transactionally upserts its normalized record and the `last_selected_root` setting before the background job starts. The job is then inserted as `RUNNING`. Progress is checkpointed every 250 discovered entries or two seconds, whichever occurs first, avoiding a database write for every file. Discovery failures are stored separately with stable categories and bounded messages. Completion stores final counters and updates `last_indexed_at`; terminal failures are also persisted.
+
+On startup, any abandoned `RUNNING` row becomes `INTERRUPTED` rather than completed or deleted. The latest interruption is exposed as the current status with a restart-to-reconcile message, while committed Lucene results remain searchable. A bounded `GET /api/index/history` endpoint exposes recent history through API DTOs. The existing frontend restores the root and allows a new full scan to reconcile it; true mid-tree continuation is not claimed. See ADRs 0012 and 0013.
 
 One daemon worker accepts at most one indexing job at a time, while search uses Lucene's independently refreshed readers. The local API exposes indexing start/status and filename, path, and content search. Requests are validated and failures use stable error codes without Java stack traces.
 

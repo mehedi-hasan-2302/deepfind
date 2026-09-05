@@ -62,6 +62,13 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.entriesIndexed").value(6))
                 .andExpect(jsonPath("$.failures").value(0));
 
+        mockMvc.perform(get("/api/index/history").param("limit", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].state").value("COMPLETED"))
+                .andExpect(jsonPath("$[0].root")
+                        .value(root.toAbsolutePath().normalize().toString()))
+                .andExpect(jsonPath("$[0].entriesIndexed").value(6));
+
         mockMvc.perform(get("/api/search").param("query", "thesis final").param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.query").value("thesis final"))
@@ -95,6 +102,10 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.details").isMap());
 
         mockMvc.perform(get("/api/search").param("query", " "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+
+        mockMvc.perform(get("/api/index/history").param("limit", "101"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
     }

@@ -13,12 +13,19 @@ import com.deepfind.filesystem.FileSystemDiscoveryService;
 import com.deepfind.index.LuceneMetadataIndex;
 import com.deepfind.index.MetadataIndexingService;
 import com.deepfind.persistence.RootCatalog;
+import com.deepfind.persistence.ScanFailureRecord;
+import com.deepfind.persistence.ScanHistoryRepository;
+import com.deepfind.persistence.ScanJobMetrics;
+import com.deepfind.persistence.ScanJobRecord;
+import com.deepfind.persistence.ScanJobState;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,6 +51,7 @@ class IndexingJobServiceTests {
             IndexingJobService jobs = new IndexingJobService(
                     indexing,
                     new RecordingRootCatalog(null),
+                    new RecordingScanHistory(null),
                     Clock.fixed(Instant.parse("2026-09-04T06:00:00Z"), ZoneOffset.UTC),
                     executor);
             try {
@@ -69,6 +77,7 @@ class IndexingJobServiceTests {
         Path restoredRoot = root.resolve("previous").toAbsolutePath().normalize();
         Path nextRoot = java.nio.file.Files.createDirectory(root.resolve("next"));
         RecordingRootCatalog catalog = new RecordingRootCatalog(restoredRoot);
+        RecordingScanHistory history = new RecordingScanHistory(null);
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try (LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("index-restoration"))) {
             MetadataIndexingService indexing = new MetadataIndexingService(
@@ -78,7 +87,7 @@ class IndexingJobServiceTests {
                     new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(1), 1, 2));
             Instant now = Instant.parse("2026-09-04T07:00:00Z");
             IndexingJobService jobs =
-                    new IndexingJobService(indexing, catalog, Clock.fixed(now, ZoneOffset.UTC), executor);
+                    new IndexingJobService(indexing, catalog, history, Clock.fixed(now, ZoneOffset.UTC), executor);
             try {
                 assertThat(jobs.status().state()).isEqualTo(IndexingJobState.IDLE);
                 assertThat(jobs.status().root()).isEqualTo(restoredRoot);
@@ -93,6 +102,82 @@ class IndexingJobServiceTests {
                         .isEqualTo(nextRoot.toAbsolutePath().normalize());
                 assertThat(catalog.selectedAt).isEqualTo(now);
                 assertThat(catalog.indexedAt).isEqualTo(now);
+                assertThat(history.startedJobId).isEqualTo(jobs.status().jobId());
+                assertThat(history.finishedState).isEqualTo(ScanJobState.COMPLETED);
+                assertThat(history.finishedMetrics.entriesIndexed()).isOne();
+            } finally {
+                jobs.shutdown();
+            }
+        }
+    }
+
+    @Test
+    void exposesAnInterruptedJobOnTheNextStartup() throws Exception {
+        Path interruptedRoot = root.resolve("interrupted").toAbsolutePath().normalize();
+        UUID jobId = UUID.randomUUID();
+        ScanJobRecord interrupted = new ScanJobRecord(
+                jobId,
+                interruptedRoot,
+                ScanJobState.INTERRUPTED,
+                interruptedRoot.resolve("partial.txt"),
+                new ScanJobMetrics(20, 12, 7, 1, 0, 2, 1, 18),
+                new ScanFailureRecord(
+                        1,
+                        interruptedRoot.resolve("locked"),
+                        "PERMISSION_DENIED",
+                        "DeepFind could not read this path.",
+                        Instant.parse("2026-09-04T07:01:00Z")),
+                "The previous indexing run was interrupted. Start indexing again to reconcile this folder.",
+                Instant.parse("2026-09-04T07:00:00Z"),
+                Instant.parse("2026-09-04T07:02:00Z"));
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("index-interrupted"))) {
+            MetadataIndexingService indexing = new MetadataIndexingService(
+                    new FileSystemDiscoveryService(),
+                    index,
+                    path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
+                    new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(1), 1, 2));
+            IndexingJobService jobs = new IndexingJobService(
+                    indexing,
+                    new RecordingRootCatalog(interruptedRoot),
+                    new RecordingScanHistory(interrupted),
+                    Clock.fixed(Instant.parse("2026-09-04T07:02:00Z"), ZoneOffset.UTC),
+                    executor);
+            try {
+                assertThat(jobs.status().jobId()).isEqualTo(jobId);
+                assertThat(jobs.status().state()).isEqualTo(IndexingJobState.INTERRUPTED);
+                assertThat(jobs.status().entriesDiscovered()).isEqualTo(20);
+                assertThat(jobs.status().lastFailure().reason().name()).isEqualTo("PERMISSION_DENIED");
+                assertThat(jobs.status().errorMessage()).contains("Start indexing again");
+            } finally {
+                jobs.shutdown();
+            }
+        }
+    }
+
+    @Test
+    void persistsATerminalFailureWhenIndexingStopsUnexpectedly() throws Exception {
+        RecordingScanHistory history = new RecordingScanHistory(null);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("index-failure"))) {
+            MetadataIndexingService indexing = new MetadataIndexingService(
+                    new FailingDiscoveryService(),
+                    index,
+                    path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
+                    new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(1), 1, 2));
+            IndexingJobService jobs = new IndexingJobService(
+                    indexing,
+                    new RecordingRootCatalog(null),
+                    history,
+                    Clock.fixed(Instant.parse("2026-09-05T02:00:00Z"), ZoneOffset.UTC),
+                    executor);
+            try {
+                jobs.start(root);
+                awaitTerminal(jobs, Duration.ofSeconds(2));
+
+                assertThat(jobs.status().state()).isEqualTo(IndexingJobState.FAILED);
+                assertThat(history.finishedState).isEqualTo(ScanJobState.FAILED);
+                assertThat(history.finishedMetrics).isEqualTo(ScanJobMetrics.empty());
             } finally {
                 jobs.shutdown();
             }
@@ -132,6 +217,14 @@ class IndexingJobServiceTests {
         }
     }
 
+    private static final class FailingDiscoveryService extends FileSystemDiscoveryService {
+
+        @Override
+        public DiscoverySummary discover(Path root, ExclusionPolicy exclusions, DiscoveryObserver observer) {
+            throw new IllegalStateException("simulated indexing failure");
+        }
+    }
+
     private static final class RecordingRootCatalog implements RootCatalog {
 
         private final Path restoredRoot;
@@ -159,6 +252,46 @@ class IndexingJobServiceTests {
         public void markIndexed(Path root, Instant indexedAt) {
             this.indexedRoot = root.toAbsolutePath().normalize();
             this.indexedAt = indexedAt;
+        }
+    }
+
+    private static final class RecordingScanHistory implements ScanHistoryRepository {
+
+        private final ScanJobRecord interrupted;
+        private volatile UUID startedJobId;
+        private volatile ScanJobState finishedState;
+        private volatile ScanJobMetrics finishedMetrics;
+
+        private RecordingScanHistory(ScanJobRecord interrupted) {
+            this.interrupted = interrupted;
+        }
+
+        @Override
+        public Optional<ScanJobRecord> interruptRunningJobs(Instant interruptedAt, String message) {
+            return Optional.ofNullable(interrupted);
+        }
+
+        @Override
+        public void start(UUID jobId, Path root, Instant startedAt) {
+            this.startedJobId = jobId;
+        }
+
+        @Override
+        public void checkpoint(UUID jobId, Path currentPath, ScanJobMetrics metrics) {}
+
+        @Override
+        public void recordFailure(UUID jobId, Path path, String reason, String message, Instant recordedAt) {}
+
+        @Override
+        public void finish(
+                UUID jobId, ScanJobState state, ScanJobMetrics metrics, String errorMessage, Instant finishedAt) {
+            this.finishedState = state;
+            this.finishedMetrics = metrics;
+        }
+
+        @Override
+        public List<ScanJobRecord> findRecent(int limit) {
+            return interrupted == null ? List.of() : List.of(interrupted);
         }
     }
 }
