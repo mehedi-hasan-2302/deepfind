@@ -36,6 +36,7 @@ import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.BoostQuery;
+import org.apache.lucene.search.FuzzyQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
@@ -249,9 +250,16 @@ public final class LuceneMetadataIndex implements AutoCloseable {
             IndexSearcher searcher = searcherManager.acquire();
             try {
                 TopDocs hits = searcher.search(luceneQuery, limit);
+                boolean fuzzyFallback = false;
+                Optional<String> fuzzyTerm = parsedQuery.fuzzyFilenameTerm();
+                if (hits.scoreDocs.length == 0 && fuzzyTerm.isPresent()) {
+                    Query fuzzyQuery = applyFilters(buildFuzzyFilenameQuery(fuzzyTerm.orElseThrow()), filters);
+                    hits = searcher.search(fuzzyQuery, limit);
+                    fuzzyFallback = true;
+                }
                 return new MetadataSearchPage(
                         hits.totalHits == null ? hits.scoreDocs.length : hits.totalHits.value(),
-                        mapResults(searcher, hits.scoreDocs, query, parsedQuery));
+                        mapResults(searcher, hits.scoreDocs, query, parsedQuery, fuzzyFallback));
             } finally {
                 searcherManager.release(searcher);
             }
@@ -352,6 +360,11 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         return query.build();
     }
 
+    private static Query buildFuzzyFilenameQuery(String term) {
+        int maximumEdits = term.length() < 6 ? 1 : 2;
+        return new FuzzyQuery(new Term(LuceneIndexSchema.FILENAME, term), maximumEdits, 1, 50, true);
+    }
+
     private Query phraseQuery(String phrase) {
         QueryBuilder builder = new QueryBuilder(analyzer);
         BooleanQuery.Builder fields = new BooleanQuery.Builder();
@@ -371,13 +384,18 @@ public final class LuceneMetadataIndex implements AutoCloseable {
     }
 
     private List<MetadataSearchResult> mapResults(
-            IndexSearcher searcher, ScoreDoc[] hits, String queryText, ParsedSearchQuery parsedQuery)
+            IndexSearcher searcher,
+            ScoreDoc[] hits,
+            String queryText,
+            ParsedSearchQuery parsedQuery,
+            boolean fuzzyFallback)
             throws IOException {
         List<MetadataSearchResult> results = new java.util.ArrayList<>(hits.length);
         for (ScoreDoc hit : hits) {
             Document document = searcher.storedFields().document(hit.doc);
             FileMetadata metadata = mapper.fromDocument(document);
-            MetadataMatchType matchType = matchType(metadata, document, parsedQuery);
+            MetadataMatchType matchType =
+                    fuzzyFallback ? MetadataMatchType.FUZZY_FILENAME : matchType(metadata, document, parsedQuery);
             SearchSnippet snippet = matchType == MetadataMatchType.CONTENT
                             || matchType == MetadataMatchType.EXACT_PHRASE
                     ? ContentSnippetGenerator.generate(document.get(LuceneIndexSchema.SNIPPET_SOURCE), queryText)

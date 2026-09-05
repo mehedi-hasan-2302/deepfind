@@ -6,5 +6,6 @@ public enum MetadataMatchType {
     FILENAME,
     PATH,
     EXACT_PHRASE,
-    CONTENT
+    CONTENT,
+    FUZZY_FILENAME
 }

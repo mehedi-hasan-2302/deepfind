@@ -225,6 +225,7 @@ function matchLabel(matchType: SearchResult['matchType']) {
     PATH: 'Folder path',
     EXACT_PHRASE: 'Exact phrase',
     CONTENT: 'Document content',
+    FUZZY_FILENAME: 'Similar filename',
   }[matchType]
 }
 

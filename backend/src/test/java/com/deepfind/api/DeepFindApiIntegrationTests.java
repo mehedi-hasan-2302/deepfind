@@ -109,6 +109,13 @@ class DeepFindApiIntegrationTests {
                 .andExpect(jsonPath("$.totalHits").value(1))
                 .andExpect(jsonPath("$.results[0].filename").value("final_submission.docx"));
 
+        mockMvc.perform(get("/api/search").param("query", "submision").param("limit", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalHits").value(1))
+                .andExpect(jsonPath("$.results[0].filename").value("final_submission.docx"))
+                .andExpect(jsonPath("$.results[0].matchType").value("FUZZY_FILENAME"))
+                .andExpect(jsonPath("$.results[0].snippet").isEmpty());
+
         mockMvc.perform(get("/api/search").param("query", "starling").param("limit", "10"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalHits").value(1))

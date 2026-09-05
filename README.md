@@ -74,6 +74,8 @@ Reconciliation begins 30 seconds after startup and then runs at most every 15 mi
 
 Ordinary words are required but may occur across indexed filename, path, or content fields. Wrap words in balanced double quotes to require their analyzed order and adjacency, for example `"annual budget report"`. Quoted phrases can be combined with ordinary words. An unmatched quote is treated as ordinary text instead of exposing query-parser errors. Filename matches continue to outrank path and content matches, and content phrase results are labeled **Exact phrase**.
 
+When an ordinary single word of 4–32 letters or digits has no exact filename, path, or content result, DeepFind performs one filename-only spelling fallback. Four- and five-character terms allow one edit; longer terms allow at most two, with a fixed candidate-expansion cap. These results are labeled **Similar filename**. Short, multi-word, and quoted searches are never fuzzy, and a normal result always suppresses the fallback.
+
 The search interface can narrow results by entry type, extension, recent modification window, and file-size range. Filters are sent as separate validated API parameters rather than embedded in the query text, so they restrict candidates without changing relevance scores. The loopback API accepts optional `kind`, `extension`, `modifiedAfter`, `modifiedBefore`, `minSizeBytes`, and `maxSizeBytes` parameters on `GET /api/search`; date values are ISO-8601 instants and numeric ranges are inclusive bytes.
 
 ## Documentation

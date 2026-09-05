@@ -24,6 +24,7 @@
 - **Live updates active** means native changes are being tracked. **Index repair pending** means an event history became uncertain and automatic reconciliation will retry when the indexing worker is free. **Live updates unavailable** means the selected folder could not be watched; restore access and use **Refresh index**, or wait for automatic retry.
 - **Refresh index** reconciles the persisted selected folder and is disabled while another indexing job is running or while the path field differs from that selected folder. Use **Start indexing** after changing the path.
 - Use balanced double quotes for an exact analyzed phrase, such as `"salary expectation"`. If a closing quote is missing, DeepFind intentionally searches the words as ordinary text rather than rejecting the request. Phrase search is lexical and does not yet add synonyms or semantic similarity.
+- **Similar filename** means the ordinary search returned no results and DeepFind retried one plain 4–32-character word against filename tokens only. This conservative fallback does not run for short, multi-word, quoted, path, or content similarity searches.
 - Entry type, extension, modified-time, and size filters combine with the text query. Use **Clear filters** when an expected result disappears. Extensions may be entered as `pdf` or `.pdf` and are matched case-insensitively. Size presets use binary units (1 MB = 1,048,576 bytes), and modified presets compare against the current browser time.
 
 ## Local database issues

@@ -246,6 +246,57 @@ class LuceneMetadataIndexTests {
     }
 
     @Test
+    void fallsBackToBoundedFuzzyFilenameMatchingAndKeepsFilters() {
+        Path indexPath = temporaryDirectory.resolve("fuzzy-index");
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(indexPath)) {
+            index.upsert(metadata(temporaryDirectory.resolve("receipt.pdf"), 10));
+            index.upsert(metadata(temporaryDirectory.resolve("receipts-2025.xlsx"), 20));
+            index.upsert(metadata(temporaryDirectory.resolve("images/purchase_receipt.jpg"), 30));
+            index.upsert(metadata(temporaryDirectory.resolve("unrelated.txt"), 40));
+            index.commit();
+
+            assertThat(index.search("reciept", 10))
+                    .extracting(result -> result.metadata().filename())
+                    .containsExactlyInAnyOrder("receipt.pdf", "receipts-2025.xlsx", "purchase_receipt.jpg");
+            assertThat(index.search("reciept", 10))
+                    .allSatisfy(result -> assertThat(result.matchType()).isEqualTo(MetadataMatchType.FUZZY_FILENAME));
+            assertThat(index.searchPage("reciept", 10, new MetadataSearchFilters(null, "pdf", null, null, null, null))
+                            .results())
+                    .singleElement()
+                    .extracting(result -> result.metadata().filename())
+                    .isEqualTo("receipt.pdf");
+        }
+    }
+
+    @Test
+    void doesNotMixFuzzyCandidatesIntoPrimaryMatches() {
+        Path indexPath = temporaryDirectory.resolve("primary-before-fuzzy-index");
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(indexPath)) {
+            index.upsert(metadata(temporaryDirectory.resolve("reciept-notes.txt"), 10));
+            index.upsert(metadata(temporaryDirectory.resolve("receipt.pdf"), 20));
+            index.commit();
+
+            assertThat(index.search("reciept", 10)).singleElement().satisfies(result -> {
+                assertThat(result.metadata().filename()).isEqualTo("reciept-notes.txt");
+                assertThat(result.matchType()).isNotEqualTo(MetadataMatchType.FUZZY_FILENAME);
+            });
+        }
+    }
+
+    @Test
+    void skipsFuzzyFallbackForShortMultiTermAndQuotedQueries() {
+        Path indexPath = temporaryDirectory.resolve("ineligible-fuzzy-index");
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(indexPath)) {
+            index.upsert(metadata(temporaryDirectory.resolve("receipt.pdf"), 10));
+            index.commit();
+
+            assertThat(index.search("rcp", 10)).isEmpty();
+            assertThat(index.search("reciept archive", 10)).isEmpty();
+            assertThat(index.search("\"reciept\"", 10)).isEmpty();
+        }
+    }
+
+    @Test
     void emptyQueriesAreSafeAndLimitsAreBounded() {
         try (LuceneMetadataIndex index = new LuceneMetadataIndex(temporaryDirectory.resolve("index"))) {
             assertThat(index.search("   ", 10)).isEmpty();

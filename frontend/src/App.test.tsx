@@ -238,6 +238,38 @@ describe('App', () => {
     expect(screen.getByRole('heading', { name: 'board-minutes.txt' })).toBeInTheDocument()
   })
 
+  it('explains a fuzzy filename fallback result', async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString()
+      if (url === '/api/index/status') return jsonResponse(idleStatus)
+      if (url.startsWith('/api/search?')) {
+        return jsonResponse({
+          query: 'reciept',
+          tookMs: 2,
+          totalHits: 1,
+          results: [{
+            path: 'D:\\Archive\\receipt.pdf',
+            filename: 'receipt.pdf',
+            extension: 'pdf',
+            type: 'FILE',
+            sizeBytes: 512,
+            modifiedAt: '2026-09-01T10:30:00Z',
+            matchType: 'FUZZY_FILENAME',
+            snippet: null,
+          }],
+        })
+      }
+      return jsonResponse({}, 404)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'reciept' } })
+
+    expect(await screen.findByText('Similar filename')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'receipt.pdf' })).toBeInTheDocument()
+  })
+
   it('sends explicit type, extension, and size filters without changing the query text', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString()

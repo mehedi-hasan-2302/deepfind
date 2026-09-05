@@ -2,8 +2,13 @@ package com.deepfind.index;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 
 record ParsedSearchQuery(String literalText, String unquotedText, List<String> phrases) {
+
+    private static final int MINIMUM_FUZZY_TERM_LENGTH = 4;
+    private static final int MAXIMUM_FUZZY_TERM_LENGTH = 32;
 
     static ParsedSearchQuery parse(String input) {
         String text = input.trim();
@@ -44,5 +49,16 @@ record ParsedSearchQuery(String literalText, String unquotedText, List<String> p
 
     private static String normalize(String value) {
         return value.trim().replaceAll("\\s+", " ");
+    }
+
+    Optional<String> fuzzyFilenameTerm() {
+        if (!phrases.isEmpty()
+                || !literalText.equals(unquotedText)
+                || literalText.length() < MINIMUM_FUZZY_TERM_LENGTH
+                || literalText.length() > MAXIMUM_FUZZY_TERM_LENGTH
+                || !literalText.matches("[\\p{L}\\p{N}]+")) {
+            return Optional.empty();
+        }
+        return Optional.of(literalText.toLowerCase(Locale.ROOT));
     }
 }
