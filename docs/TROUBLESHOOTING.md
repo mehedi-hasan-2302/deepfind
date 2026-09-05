@@ -18,3 +18,8 @@
 - Unsupported, oversized, unreadable, disguised, or malformed documents remain filename/path searchable when their metadata can be read, but their contents are not searchable.
 - Content extraction defaults to 20 MiB, 500,000 characters, and 15 seconds per file. Review `deepfind.extraction.*` settings if a legitimate local document is skipped.
 - Scanned/image-only PDFs require future local OCR support and normally provide no searchable text today.
+
+## Local database issues
+
+- If startup reports a Flyway migration validation error, do not delete the database. Stop DeepFind, copy `<data-directory>\deepfind.db` and any adjacent `-wal`/`-shm` files as a backup, then use a build compatible with that database or investigate the migration checksum change.
+- If startup reports SQLite corruption, DeepFind intentionally leaves the file in place. Stop the application and preserve `<data-directory>\deepfind.db` before attempting recovery. Moving only that database aside creates fresh settings on the next start but loses saved-root records and timestamps; it does not remove the Lucene index or any source files.

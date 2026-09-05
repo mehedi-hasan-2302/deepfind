@@ -2,7 +2,7 @@
 
 ## Current behavior
 
-DeepFind indexes selected filesystem metadata and supported document text into a local Lucene directory. The default data directory is `${user.home}/.deepfind`, and `DEEPFIND_DATA_DIRECTORY` can override it. Extraction runs locally under byte, character, concurrency, and time limits. Lucene stores searchable postings and an extraction-bounded text copy used only to create result snippets; the index must be treated as sensitive local data. Search responses expose only short matching excerpts, and React renders document text without interpreting it as HTML. Search queries and extracted content are not logged by application code. The application does not send telemetry, load remote fonts, call cloud APIs, or upload indexed metadata or content.
+DeepFind indexes selected filesystem metadata and supported document text into a local Lucene directory. A local SQLite database stores normalized selected-root paths, selection/index timestamps, and application settings. The default data directory is `${user.home}/.deepfind`, and `DEEPFIND_DATA_DIRECTORY` can override it. Extraction runs locally under byte, character, concurrency, and time limits. Lucene stores searchable postings and an extraction-bounded text copy used only to create result snippets; the entire data directory must be treated as sensitive local data. Search responses expose only short matching excerpts, and React renders document text without interpreting it as HTML. Search queries and extracted content are not logged by application code. The application does not send telemetry, load remote fonts, call cloud APIs, or upload indexed metadata or content.
 
 ## Product policy
 
@@ -17,6 +17,6 @@ DeepFind indexes selected filesystem metadata and supported document text into a
 
 The runtime backend binds to loopback only. The Vite development server also binds to loopback and proxies relative `/api` requests to the backend; no broad CORS policy is enabled. Open/reveal requests pass an existing local path to the operating system as a discrete process argument and never interpolate it into a shell command. Clipboard operations remain inside the local browser session. Development tools may contact package repositories while installing dependencies; that is build-time behavior, not application telemetry. Apache Tika runs in-process and performs no application-configured outbound requests; embedded-document extraction is disabled.
 
-## Future storage disclosure
+## Storage disclosure
 
-The Lucene search index is stored under `<data-directory>/index` and is not encrypted by DeepFind. No extraction temporary files are created by the current implementation. Database, settings, and application-log paths will be documented before those stores are introduced. DeepFind will not claim its index is encrypted until encryption is actually implemented and verified.
+The Lucene search index is stored under `<data-directory>/index`. SQLite structured state is stored in `<data-directory>/deepfind.db`; `deepfind.db-wal` and `deepfind.db-shm` may exist while the application is running. Neither store is encrypted by DeepFind. The SQLite database contains local paths and timestamps but not extracted document contents; those remain in Lucene. No extraction temporary files are created by the current implementation. Application logs remain console-only. DeepFind will not claim its local state is encrypted until encryption is implemented and verified.

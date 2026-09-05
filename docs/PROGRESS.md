@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 2 — Content Extraction (complete)
+Phase 3 — Persistence and Index Lifecycle (in progress)
 
 ## Last completed step
 
-STEP 9 — Add safe highlighted content snippets and complete Phase 2.
+STEP 10 — Persist indexed roots and settings locally with SQLite.
 
 ## Completed
 
@@ -44,10 +44,15 @@ STEP 9 — Add safe highlighted content snippets and complete Phase 2.
 - Whitespace-normalized content excerpts with a 240-character body limit, boundary ellipses, Unicode-safe slicing, and validated highlight offsets.
 - Plain-text snippet DTOs through the search API and React-node highlighting without document-derived HTML injection.
 - Snippet tests for context selection, multiple terms, whitespace, Unicode, response bounds, API mapping, and hostile markup-like document text.
+- SQLite JDBC persistence under the shared local data directory, with foreign keys, busy timeout, write-ahead logging, and normal synchronous durability.
+- Flyway schema migrations for normalized indexed-root records and generic application settings, applied before dependent services initialize.
+- Transactional root-catalog contracts that preserve first-seen time, update selection/index timestamps, and prevent duplicate normalized paths.
+- Last-selected-root restoration into idle indexing status so the frontend folder input survives backend restarts without a separate endpoint.
+- Migration-upgrade, repeat-migration, Unicode-path, restart, uniqueness, timestamp, corruption-preservation, job-lifecycle, and frontend-restoration tests.
 
 ## Current behavior
 
-The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists an extraction-bounded source copy for snippet generation, so the local data directory contains sensitive text and is not encrypted. The index defaults to `${user.home}/.deepfind/index` and can be redirected with `DEEPFIND_DATA_DIRECTORY`. Earlier schema indexes must be removed and rebuilt. Indexed roots are not yet persisted as configuration.
+The user can index a local folder and search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content-only results include a short highlighted excerpt rendered safely as text. Lucene persists an extraction-bounded source copy for snippet generation. SQLite persists selected-root paths, settings, and timestamps, and restores the latest root after restart. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Scan history and interrupted-job recovery are not yet persisted.
 
 ## Commands verified
 
@@ -69,14 +74,16 @@ The user can index a local folder and search filenames, paths, and text inside s
 - `npm run check` in `frontend` after STEP 8 — passed; ESLint, 5 Vitest interaction tests, TypeScript, and Vite production build succeeded.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 9 — passed; 44 tests, package, and Spotless check succeeded. One host-dependent symlink test was skipped.
 - `npm run check` in `frontend` after STEP 9 — passed; ESLint, 5 Vitest interaction tests (including safe snippet rendering), TypeScript, and Vite production build succeeded.
+- `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 10 — passed; 48 tests, package, Flyway startup migration, and Spotless check succeeded. One host-dependent symlink test was skipped.
+- `npm run check` in `frontend` after STEP 10 — passed; ESLint, 6 Vitest interaction tests (including persisted-root restoration), TypeScript, and Vite production build succeeded.
 
 ## Known failures
 
-No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits. Schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets.
+No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Extraction timeouts currently use cooperative thread interruption, not hard process isolation; a parser that ignores interruption can retain a bounded worker until it exits. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced.
 
 ## Next recommended step
 
-Begin Phase 3 by persisting indexed roots and settings locally, then record indexing jobs/scan history and define restart behavior for incomplete work. Preserve the already durable Lucene index and add user-facing rebuild management for schema changes.
+Record indexing jobs and scan history, then define explicit restart behavior for incomplete work. Preserve the already durable Lucene index and SQLite root catalog, and add user-facing rebuild management for schema changes.
 
 ## Important architectural notes
 
@@ -89,4 +96,5 @@ Begin Phase 3 by persisting indexed roots and settings locally, then record inde
 - The asynchronous loopback API and process-local job policy are documented in ADR 0007.
 - Validated, shell-free platform action behavior is documented in ADR 0008.
 - Tika extraction policy and cooperative-timeout tradeoffs are documented in ADR 0009.
-- SQLite and the desktop shell remain deferred until their owning steps/phases.
+- SQLite owns structured local state under the shared data directory; see ADR 0012. Scan history and interrupted-job recovery remain deferred.
+- The desktop shell remains deferred until its owning phase.

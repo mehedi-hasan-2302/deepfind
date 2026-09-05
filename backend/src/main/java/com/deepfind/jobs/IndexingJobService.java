@@ -8,6 +8,7 @@ import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.PathNormalizer;
 import com.deepfind.index.MetadataIndexingOutcome;
 import com.deepfind.index.MetadataIndexingService;
+import com.deepfind.persistence.RootCatalog;
 import jakarta.annotation.PreDestroy;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,23 +30,28 @@ public class IndexingJobService {
             "Indexing stopped because the local search index could not be updated.";
 
     private final MetadataIndexingService indexingService;
+    private final RootCatalog rootCatalog;
     private final Clock clock;
     private final ExecutorService executor;
-    private final AtomicReference<IndexingJobStatus> status = new AtomicReference<>(IndexingJobStatus.idle());
+    private final AtomicReference<IndexingJobStatus> status;
 
     @Autowired
-    public IndexingJobService(MetadataIndexingService indexingService) {
-        this(indexingService, Clock.systemUTC(), Executors.newSingleThreadExecutor(runnable -> {
+    public IndexingJobService(MetadataIndexingService indexingService, RootCatalog rootCatalog) {
+        this(indexingService, rootCatalog, Clock.systemUTC(), Executors.newSingleThreadExecutor(runnable -> {
             Thread thread = new Thread(runnable, "deepfind-indexer");
             thread.setDaemon(true);
             return thread;
         }));
     }
 
-    IndexingJobService(MetadataIndexingService indexingService, Clock clock, ExecutorService executor) {
+    IndexingJobService(
+            MetadataIndexingService indexingService, RootCatalog rootCatalog, Clock clock, ExecutorService executor) {
         this.indexingService = Objects.requireNonNull(indexingService, "indexingService must not be null");
+        this.rootCatalog = Objects.requireNonNull(rootCatalog, "rootCatalog must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.executor = Objects.requireNonNull(executor, "executor must not be null");
+        this.status = new AtomicReference<>(
+                IndexingJobStatus.idle(rootCatalog.lastSelectedRoot().orElse(null)));
     }
 
     public synchronized IndexingJobStatus start(Path requestedRoot) {
@@ -59,7 +65,9 @@ public class IndexingJobService {
             throw new IndexRootNotAccessibleException("DeepFind cannot read this folder.");
         }
 
-        IndexingJobStatus started = IndexingJobStatus.running(UUID.randomUUID(), root, clock.instant());
+        var startedAt = clock.instant();
+        rootCatalog.rememberSelected(root, startedAt);
+        IndexingJobStatus started = IndexingJobStatus.running(UUID.randomUUID(), root, startedAt);
         status.set(started);
         executor.submit(() -> run(started));
         return started;
@@ -89,7 +97,9 @@ public class IndexingJobService {
                             status.updateAndGet(current -> current.withProgress(progress, indexed.get()));
                         }
                     });
-            status.updateAndGet(current -> current.completed(outcome, clock.instant()));
+            var finishedAt = clock.instant();
+            rootCatalog.markIndexed(started.root(), finishedAt);
+            status.updateAndGet(current -> current.completed(outcome, finishedAt));
         } catch (RuntimeException exception) {
             status.updateAndGet(current -> current.failed(FAILED_MESSAGE, clock.instant()));
         }

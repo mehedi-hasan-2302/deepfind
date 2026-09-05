@@ -26,8 +26,12 @@ public record IndexingJobStatus(
         Instant finishedAt) {
 
     static IndexingJobStatus idle() {
+        return idle(null);
+    }
+
+    static IndexingJobStatus idle(Path root) {
         return new IndexingJobStatus(
-                null, IndexingJobState.IDLE, null, null, 0, 0, 0, 0, 0, 0, 0, 0, null, null, null, null);
+                null, IndexingJobState.IDLE, root, null, 0, 0, 0, 0, 0, 0, 0, 0, null, null, null, null);
     }
 
     static IndexingJobStatus running(UUID jobId, Path root, Instant startedAt) {

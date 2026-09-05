@@ -41,6 +41,15 @@ describe('App', () => {
     expect(screen.getByRole('button', { name: /start indexing/i })).toBeDisabled()
   })
 
+  it('restores the last selected folder from local backend state', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({ ...idleStatus, root: 'D:\\資料\\DeepFind' })))
+
+    render(<App />)
+
+    expect(await screen.findByDisplayValue('D:\\資料\\DeepFind')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /start indexing/i })).toBeEnabled()
+  })
+
   it('starts indexing and polls until the index is ready', async () => {
     const runningStatus: IndexStatus = {
       ...idleStatus,

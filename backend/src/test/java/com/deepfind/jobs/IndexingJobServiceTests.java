@@ -12,11 +12,13 @@ import com.deepfind.filesystem.ExclusionPolicy;
 import com.deepfind.filesystem.FileSystemDiscoveryService;
 import com.deepfind.index.LuceneMetadataIndex;
 import com.deepfind.index.MetadataIndexingService;
+import com.deepfind.persistence.RootCatalog;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,7 +42,10 @@ class IndexingJobServiceTests {
                     path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
                     new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(1), 1, 2));
             IndexingJobService jobs = new IndexingJobService(
-                    indexing, Clock.fixed(Instant.parse("2026-09-04T06:00:00Z"), ZoneOffset.UTC), executor);
+                    indexing,
+                    new RecordingRootCatalog(null),
+                    Clock.fixed(Instant.parse("2026-09-04T06:00:00Z"), ZoneOffset.UTC),
+                    executor);
             try {
                 assertThat(jobs.start(root).state()).isEqualTo(IndexingJobState.RUNNING);
                 assertThat(discovery.awaitStarted(Duration.ofSeconds(2))).isTrue();
@@ -54,6 +59,41 @@ class IndexingJobServiceTests {
                 assertThat(jobs.status().state()).isEqualTo(IndexingJobState.COMPLETED);
             } finally {
                 discovery.release();
+                jobs.shutdown();
+            }
+        }
+    }
+
+    @Test
+    void restoresTheLastSelectedRootAndRecordsSuccessfulCompletion() throws Exception {
+        Path restoredRoot = root.resolve("previous").toAbsolutePath().normalize();
+        Path nextRoot = java.nio.file.Files.createDirectory(root.resolve("next"));
+        RecordingRootCatalog catalog = new RecordingRootCatalog(restoredRoot);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+        try (LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("index-restoration"))) {
+            MetadataIndexingService indexing = new MetadataIndexingService(
+                    new FileSystemDiscoveryService(),
+                    index,
+                    path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
+                    new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(1), 1, 2));
+            Instant now = Instant.parse("2026-09-04T07:00:00Z");
+            IndexingJobService jobs =
+                    new IndexingJobService(indexing, catalog, Clock.fixed(now, ZoneOffset.UTC), executor);
+            try {
+                assertThat(jobs.status().state()).isEqualTo(IndexingJobState.IDLE);
+                assertThat(jobs.status().root()).isEqualTo(restoredRoot);
+
+                jobs.start(nextRoot);
+                awaitTerminal(jobs, Duration.ofSeconds(2));
+
+                assertThat(jobs.status().state()).isEqualTo(IndexingJobState.COMPLETED);
+                assertThat(catalog.selectedRoot)
+                        .isEqualTo(nextRoot.toAbsolutePath().normalize());
+                assertThat(catalog.indexedRoot)
+                        .isEqualTo(nextRoot.toAbsolutePath().normalize());
+                assertThat(catalog.selectedAt).isEqualTo(now);
+                assertThat(catalog.indexedAt).isEqualTo(now);
+            } finally {
                 jobs.shutdown();
             }
         }
@@ -89,6 +129,36 @@ class IndexingJobServiceTests {
 
         void release() {
             released.countDown();
+        }
+    }
+
+    private static final class RecordingRootCatalog implements RootCatalog {
+
+        private final Path restoredRoot;
+        private volatile Path selectedRoot;
+        private volatile Path indexedRoot;
+        private volatile Instant selectedAt;
+        private volatile Instant indexedAt;
+
+        private RecordingRootCatalog(Path restoredRoot) {
+            this.restoredRoot = restoredRoot;
+        }
+
+        @Override
+        public Optional<Path> lastSelectedRoot() {
+            return Optional.ofNullable(restoredRoot);
+        }
+
+        @Override
+        public void rememberSelected(Path root, Instant selectedAt) {
+            this.selectedRoot = root.toAbsolutePath().normalize();
+            this.selectedAt = selectedAt;
+        }
+
+        @Override
+        public void markIndexed(Path root, Instant indexedAt) {
+            this.indexedRoot = root.toAbsolutePath().normalize();
+            this.indexedAt = indexedAt;
         }
     }
 }
