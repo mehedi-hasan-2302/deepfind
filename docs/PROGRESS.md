@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 6 — Indexing UX (in progress)
+Phase 7 — Security & Hardening (ready to begin)
 
 ## Last completed step
 
-STEP 22 — Add durable safe-stop indexing pause/resume.
+STEP 23 — Add persisted root-relative folder exclusions and complete Phase 6.
 
 ## Completed
 
@@ -109,8 +109,16 @@ STEP 22 — Add durable safe-stop indexing pause/resume.
 - Single-job exclusion across running, pausing, and paused ownership, with startup recovery distinguishing deliberately paused work from crashes during running/pausing.
 - Loopback pause/resume endpoints, stable invalid-transition conflicts, responsive frontend controls, continued pausing-state polling, and clear recovery wording.
 - Lifecycle, migration, persistence, API-error, HTTP-route, and React pause/resume regressions.
+- Per-selected-root exclusion settings stored in SQLite as validated, normalized relative paths while retaining immutable built-in generated-folder exclusions.
+- One shared exclusion policy across full scans, changed-only reconciliation, and live watcher sessions, with list replacement serialized through the single job lane.
+- Immediate safe reconciliation after an exclusion change so newly skipped Lucene entries are removed and newly included entries can return without modifying source data.
+- Loopback read/replace exclusion endpoints, stable validation errors, and an accessible one-path-per-line indexing-panel editor with explicit privacy guidance.
+- Unit, HTTP integration, and React regressions for normalization, deduplication, persistence, traversal rejection, result pruning, and save/reconciliation behavior.
+- Phase 6 exit criteria met: indexing progress, counters, current path, pause/resume recovery, concurrent search, live-update health, refresh, and exclusions are understandable from the interface.
 
 ## Current behavior
+
+Each selected root can now persist a validated list of relative folders to skip. Saving the list triggers changed-only reconciliation, and full scans, reconciliation, and live watching all use the same policy without modifying source files.
 
 The user can index a local folder, safely pause after bounded in-flight work, and resume through changed-only reconciliation. Completed partial work is committed, deliberate pause state survives restart, and abandoned running/pausing work remains classified as interrupted. The user can search filenames, paths, and text inside supported text, Markdown, common source/configuration, PDF, and DOCX files. Ordinary multi-term searches require all terms; balanced double quotes request positional phrase matching and malformed quotes fall back safely. A single eligible plain term with no ordinary results gets a bounded filename-only spelling retry labeled **Similar filename**; successful primary, short, multi-word, and quoted searches are never fuzzed. Filename phrase results retain priority and content phrase results are explained explicitly. Search results can be narrowed by entry type, extension, recent modification, and file size without changing relevance order, and broad result sets can be appended in bounded 50-result pages. Metadata is upserted before bounded content work and malformed content does not remove its filename/path result. Content results include a short highlighted excerpt rendered safely as text. Lucene persists searchable data and an extraction-bounded source copy for snippets. SQLite persists roots, settings, scan histories, progress checkpoints, and categorized failures. The persisted selected root is watched automatically, and ordinary create, content edit, rename, and delete events update search results. Metadata-aware reconciliation runs after startup and periodically, or promptly after explicit watcher uncertainty, without re-extracting unchanged content. The interface displays live-update health and can request immediate refresh of the persisted root. Local data defaults to `${user.home}/.deepfind`, can be redirected with `DEEPFIND_DATA_DIRECTORY`, and is not encrypted. Earlier Lucene schema indexes must be removed and rebuilt. Reconciliation provides eventual rather than atomic filesystem consistency.
 
@@ -155,6 +163,8 @@ The user can index a local folder, safely pause after bounded in-flight work, an
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 21 — passed; 85 tests, deterministic common-query and relevance-tier evaluation, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `backend\mvnw.cmd spotless:apply clean verify --batch-mode --no-transfer-progress` after STEP 22 — passed; 88 tests, pause/resume lifecycle and schema-v5 persistence coverage, executable backend JAR packaging, Spring startup, and Spotless check succeeded, with two host-dependent symbolic-link tests skipped.
 - `npm run check` in `frontend` after STEP 22 — passed; ESLint, 13 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
+- `backend\mvnw.cmd spotless:apply verify --batch-mode --no-transfer-progress` after STEP 23 — passed; 92 tests covered persisted exclusions and HTTP reconciliation, executable JAR packaging and Spotless succeeded, and two host-dependent symbolic-link tests were skipped.
+- `npm run check` in `frontend` after STEP 23 — passed; ESLint, 14 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 
 ## Known failures
 
@@ -162,7 +172,7 @@ No product failures recorded. Maven is not installed globally, so all backend co
 
 ## Next recommended step
 
-Add persisted exclusion controls so non-technical users can omit selected subfolders without editing backend configuration, then reconcile the index safely when exclusions change.
+Begin Phase 7 with a local API and network-exposure audit, then close any hardening gaps with executable regressions.
 
 ## Important architectural notes
 
@@ -186,6 +196,7 @@ Add persisted exclusion controls so non-technical users can omit selected subfol
 - Zero-result-only fuzzy filename eligibility, edit-distance/expansion bounds, filter preservation, and result explanation are defined by ADR 0021.
 - Bounded offset windows, one-hit continuation detection, exact/lower-bound totals, frontend batching, and live-index consistency tradeoffs are defined by ADR 0022.
 - Durable pausing/paused states, safe-stop commit behavior, watcher restoration, and reconciliation-based resume are defined by ADR 0023.
+- Per-root relative exclusion persistence, validation, shared scan/watch policy, and reconciliation behavior are defined by ADR 0024.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
 - Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
 - The desktop shell remains deferred until its owning phase.

@@ -1,5 +1,6 @@
 package com.deepfind.api;
 
+import com.deepfind.filesystem.InvalidRootExclusionException;
 import com.deepfind.index.IndexAccessException;
 import com.deepfind.jobs.IndexRootNotAccessibleException;
 import com.deepfind.jobs.IndexingAlreadyRunningException;
@@ -73,6 +74,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler({InvalidPathException.class, IllegalArgumentException.class})
     ResponseEntity<ApiError> invalidValue() {
         return error(HttpStatus.BAD_REQUEST, "INVALID_REQUEST", "The request contains an invalid value.", Map.of());
+    }
+
+    @ExceptionHandler(InvalidRootExclusionException.class)
+    ResponseEntity<ApiError> invalidRootExclusion(InvalidRootExclusionException exception) {
+        return error(HttpStatus.BAD_REQUEST, "INDEX_EXCLUSION_INVALID", exception.getMessage(), Map.of());
     }
 
     @ExceptionHandler(Exception.class)

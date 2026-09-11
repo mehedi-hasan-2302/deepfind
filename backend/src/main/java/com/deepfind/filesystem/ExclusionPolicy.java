@@ -32,6 +32,10 @@ public final class ExclusionPolicy {
         return of(DEFAULT_SEGMENTS, List.of());
     }
 
+    public static ExclusionPolicy defaultsWithPaths(Collection<Path> excludedPaths) {
+        return of(DEFAULT_SEGMENTS, excludedPaths);
+    }
+
     public static ExclusionPolicy none() {
         return of(Set.of(), List.of());
     }

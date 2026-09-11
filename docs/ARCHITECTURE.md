@@ -2,7 +2,7 @@
 
 ## Status
 
-Phases 1–5 provide an end-to-end local search slice with durable index, root configuration, scan history, interrupted-run detection, automatic selected-root watching, bounded incremental Lucene updates, scheduled reconciliation, manual refresh, visible freshness health, phrase search, explicit filters, bounded fuzzy fallback, highlighting, and pagination. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, a loopback API, a React interface, guarded platform file actions, event application, watcher lifecycle coordination, automatic repair, and a deterministic search-quality evaluation corpus are implemented. Indexing UX, hardening, desktop packaging, performance validation, and beta readiness remain.
+Phases 1–6 provide an end-to-end local search slice with durable index, root configuration, scan history, interrupted-run detection, automatic selected-root watching, bounded incremental Lucene updates, scheduled reconciliation, manual refresh, visible freshness health, pause/resume, persisted per-root exclusions, phrase search, explicit filters, bounded fuzzy fallback, highlighting, and pagination. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, a loopback API, a React interface, guarded platform file actions, event application, watcher lifecycle coordination, automatic repair, understandable indexing controls, and a deterministic search-quality evaluation corpus are implemented. Hardening, desktop packaging, performance validation, and beta readiness remain.
 
 ## Components
 
@@ -21,7 +21,7 @@ Controllers will not operate Lucene readers, Tika parsers, databases, or filesys
 
 ## Filesystem discovery
 
-Discovery uses Java NIO `walkFileTree` and emits immutable metadata, progress snapshots, and bounded failure descriptions through an observer. It does not retain the discovered tree in memory. Directory symlinks are indexed as link entries but are not followed. A small default exclusion set removes common generated trees; explicit exclusions can target an absolute subtree. See ADR 0005.
+Discovery uses Java NIO `walkFileTree` and emits immutable metadata, progress snapshots, and bounded failure descriptions through an observer. It does not retain the discovered tree in memory. Directory symlinks are indexed as link entries but are not followed. A small default exclusion set removes common generated trees. User exclusions are persisted per normalized root as validated root-relative paths and resolved to absolute subtrees only inside the backend. See ADRs 0005 and 0024.
 
 ## Filesystem change detection
 
@@ -40,6 +40,8 @@ Suspending native watching during a full scan prevents unordered watcher mutatio
 User-requested job pause is a controlled terminal boundary rather than a suspended Java traversal. The state advances `RUNNING` → `PAUSING` → `PAUSED`; discovery stops at the next progress boundary, bounded in-flight extraction drains, partial Lucene work commits, and native watching resumes. Resume creates a new reconciliation job and job ID so current filesystem state—not an obsolete traversal cursor—decides what remains. A paused job survives restart as paused, while a crash during `RUNNING` or `PAUSING` is recovered as interrupted. See ADR 0023.
 
 `MetadataReconciliationService` compares each discovered entry with a read-only Lucene metadata snapshot. It preserves unchanged documents, re-extracts only new, changed, or never-attempted regular files, and deletes scoped entries only when Java can prove the source path absent with no-follow semantics. Unknown or unreadable existence is preserved rather than guessed deleted. `ReconciliationScheduler` polls every 30 seconds, starts a repair immediately for reconciliation-required watcher state, and otherwise enforces a 15-minute cadence. Reconciliation uses the same single-job lane, durable scan history, and watcher pause/resume boundary as a full scan, so the two never overlap. See ADR 0017.
+
+`RootExclusionService` stores at most 100 validated relative paths per selected root in generic SQLite application settings. Both slash styles are normalized, duplicates collapse by normalized absolute search key, and absolute, root-equivalent, control-character, and traversal paths are rejected. `PUT /api/index/exclusions` replaces the complete list only while the job lane is idle and immediately schedules reconciliation. The scanner, reconciler, and watcher each resolve the same persisted policy when their session begins. Reconciliation removes newly excluded Lucene entries without touching source files; removing an exclusion lets reconciliation restore eligible entries. See ADR 0024.
 
 The local API exposes `POST /api/index/refresh` for an explicit changed-only repair and `GET /api/index/watch-status` for safe root, state, and message fields. Manual refresh rejects missing roots and overlapping jobs through stable API errors. The frontend polls freshness independently of indexing progress, explains temporary job-time pauses, and offers refresh only for the persisted selected root. See ADR 0018.
 

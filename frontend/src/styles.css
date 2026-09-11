@@ -17,12 +17,14 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
 button,
 input,
+textarea,
 a {
   outline-offset: 3px;
 }
@@ -276,6 +278,33 @@ button:disabled {
 .field-help {
   margin: 0.6rem 0 0;
   line-height: 1.5;
+}
+
+.exclusion-settings {
+  display: grid;
+  gap: 0.65rem;
+  padding-top: 1rem;
+  border-top: 1px solid #d6dfd9;
+}
+
+.exclusion-settings h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.exclusion-settings textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 5.5rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid #aebbb3;
+  border-radius: 0.72rem;
+  color: #17211d;
+  background: #fbfcfa;
+}
+
+.exclusion-settings button {
+  justify-self: start;
 }
 
 .index-status {

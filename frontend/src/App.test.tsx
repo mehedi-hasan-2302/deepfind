@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import type { IndexStatus } from './api/deepfindApi'
@@ -225,6 +225,55 @@ describe('App', () => {
     expect(await screen.findByText(/42 entries are ready to search/i, {}, { timeout: 2_000 })).toBeInTheDocument()
     expect(fetchMock).toHaveBeenCalledWith('/api/index/refresh', { method: 'POST' })
     expect(statusRequests).toBeGreaterThan(1)
+  })
+
+  it('loads and saves root-relative folder exclusions before reconciling', async () => {
+    const readyStatus: IndexStatus = {
+      ...idleStatus,
+      jobId: 'completed-job',
+      state: 'COMPLETED',
+      root: 'C:\\Docs',
+      entriesDiscovered: 10,
+      entriesIndexed: 10,
+      finishedAt: '2026-09-05T10:00:00Z',
+    }
+    const reconcilingStatus: IndexStatus = {
+      ...readyStatus,
+      jobId: 'exclusion-reconciliation',
+      state: 'RUNNING',
+      entriesDiscovered: 0,
+      entriesIndexed: 0,
+      finishedAt: null,
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input.toString()
+      if (url === '/api/index/status') return jsonResponse(readyStatus)
+      if (url === '/api/index/exclusions' && init?.method === 'PUT') {
+        return jsonResponse({ root: 'C:\\Docs', paths: ['Private', 'Archive\\Old'], reconciliation: reconcilingStatus }, 202)
+      }
+      if (url === '/api/index/exclusions') {
+        return jsonResponse({ root: 'C:\\Docs', paths: ['Private'] })
+      }
+      if (url === '/api/index/watch-status') {
+        return jsonResponse({ root: 'C:\\Docs', state: 'WATCHING', message: 'Filesystem changes are being tracked.' })
+      }
+      return jsonResponse({}, 404)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    const exclusions = await screen.findByRole('textbox', { name: 'Folders to skip' })
+    await waitFor(() => expect(exclusions).toHaveValue('Private'))
+    fireEvent.change(exclusions, { target: { value: 'Private\n Archive\\Old \n' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save exclusions' }))
+
+    expect(await screen.findByText(/indexing is in progress/i)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledWith('/api/index/exclusions', expect.objectContaining({
+      method: 'PUT',
+      body: JSON.stringify({ paths: ['Private', 'Archive\\Old'] }),
+    }))
+    expect(exclusions).toHaveValue('Private\nArchive\\Old')
   })
 
   it('debounces content search and renders useful result context', async () => {

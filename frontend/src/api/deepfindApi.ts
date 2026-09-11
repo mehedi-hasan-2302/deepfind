@@ -33,6 +33,15 @@ export interface IndexWatchStatus {
   message: string
 }
 
+export interface IndexExclusions {
+  root: string | null
+  paths: string[]
+}
+
+export interface UpdateIndexExclusionsResponse extends IndexExclusions {
+  reconciliation: IndexStatus
+}
+
 export interface SearchResult {
   path: string
   filename: string
@@ -119,6 +128,18 @@ export async function resumeIndex(): Promise<IndexStatus> {
 
 export async function getIndexWatchStatus(signal?: AbortSignal): Promise<IndexWatchStatus> {
   return requestJson<IndexWatchStatus>('/api/index/watch-status', { signal })
+}
+
+export async function getIndexExclusions(signal?: AbortSignal): Promise<IndexExclusions> {
+  return requestJson<IndexExclusions>('/api/index/exclusions', { signal })
+}
+
+export async function updateIndexExclusions(paths: string[]): Promise<UpdateIndexExclusionsResponse> {
+  return requestJson<UpdateIndexExclusionsResponse>('/api/index/exclusions', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paths }),
+  })
 }
 
 export async function searchFiles(

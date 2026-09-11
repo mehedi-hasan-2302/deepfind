@@ -2,7 +2,7 @@
 
 > You remember what was in the file. DeepFind finds where you put it.
 
-DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–5 are complete.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor or pause indexing, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface. The selected root is watched automatically, so ordinary create, edit, rename, and delete activity updates Lucene after indexing. Periodic metadata-aware reconciliation repairs missed events and proven deletions, while the interface exposes live-update health and a manual changed-only refresh.
+DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–6 are complete.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor or pause indexing, exclude selected subfolders, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface. The selected root is watched automatically, so ordinary create, edit, rename, and delete activity updates Lucene after indexing. Periodic metadata-aware reconciliation repairs missed events and proven deletions, while the interface exposes live-update health and a manual changed-only refresh.
 
 ## Privacy baseline
 
@@ -71,6 +71,8 @@ Incremental indexing uses a fixed event queue of 256 entries and waits up to 30 
 Reconciliation begins 30 seconds after startup and then runs at most every 15 minutes by default. It scans metadata but re-extracts content only for new, changed, or previously incomplete files, and removes entries only when their source paths are proven absent. Override the cadence with `deepfind.reconciliation.interval`, `deepfind.reconciliation.initial-delay`, and `deepfind.reconciliation.poll-interval`.
 
 **Pause indexing** requests a safe stop after the current discovery boundary and any in-flight extraction work. Completed index changes are committed, the paused job and counters are stored in SQLite, and native watching resumes. **Resume indexing** starts a new changed-only reconciliation job rather than trusting an obsolete directory cursor, so files changed during the pause are repaired safely. `POST /api/index/pause` and `POST /api/index/resume` expose the same lifecycle to local clients.
+
+**Folders to skip** accepts one path per line relative to the persisted selected root. Saving validates and stores the per-root list locally, then starts changed-only reconciliation so newly excluded index entries disappear and newly included paths return. Full scans, reconciliation, and live watching share this policy. The built-in generated-folder exclusions remain active, and no source file or folder is deleted or changed. Local clients can read and replace the list through `GET` and `PUT /api/index/exclusions`.
 
 ## Search behavior
 

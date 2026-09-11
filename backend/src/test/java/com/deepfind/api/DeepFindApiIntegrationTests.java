@@ -5,6 +5,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -193,6 +194,49 @@ class DeepFindApiIntegrationTests {
                         .param("maxSizeBytes", "10"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
+    }
+
+    @Test
+    void persistsFolderExclusionsAndReconcilesExistingResults() throws Exception {
+        Path privateFolder = Files.createDirectories(root.resolve("Private"));
+        Files.writeString(privateFolder.resolve("secret.txt"), "classifiedtoken");
+        Files.writeString(root.resolve("visible.txt"), "publictoken");
+
+        mockMvc.perform(post("/api/index/start")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"root\":\"" + jsonEscape(root.toString()) + "\"}"))
+                .andExpect(status().isAccepted());
+        awaitCompleted(Duration.ofSeconds(15));
+
+        mockMvc.perform(get("/api/search").param("query", "classifiedtoken"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalHits").value(1));
+
+        mockMvc.perform(put("/api/index/exclusions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paths\":[\"Private\"]}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.paths[0]").value("Private"))
+                .andExpect(jsonPath("$.reconciliation.state").value("RUNNING"));
+        awaitCompleted(Duration.ofSeconds(15));
+
+        mockMvc.perform(get("/api/index/exclusions"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.root")
+                        .value(root.toAbsolutePath().normalize().toString()))
+                .andExpect(jsonPath("$.paths[0]").value("Private"));
+        mockMvc.perform(get("/api/search").param("query", "classifiedtoken"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalHits").value(0));
+        mockMvc.perform(get("/api/search").param("query", "publictoken"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalHits").value(1));
+
+        mockMvc.perform(put("/api/index/exclusions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"paths\":[\"../outside\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INDEX_EXCLUSION_INVALID"));
     }
 
     @Test

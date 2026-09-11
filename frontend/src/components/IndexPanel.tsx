@@ -11,9 +11,25 @@ interface IndexPanelProps {
   onRefresh: () => Promise<void>
   onPause: () => Promise<void>
   onResume: () => Promise<void>
+  exclusionText: string
+  onExclusionTextChange: (value: string) => void
+  onSaveExclusions: () => Promise<void>
 }
 
-export function IndexPanel({ root, status, watchStatus, error, onRootChange, onStart, onRefresh, onPause, onResume }: IndexPanelProps) {
+export function IndexPanel({
+  root,
+  status,
+  watchStatus,
+  error,
+  onRootChange,
+  onStart,
+  onRefresh,
+  onPause,
+  onResume,
+  exclusionText,
+  onExclusionTextChange,
+  onSaveExclusions,
+}: IndexPanelProps) {
   const isRunning = status?.state === 'RUNNING'
   const isPausing = status?.state === 'PAUSING'
   const isPaused = status?.state === 'PAUSED'
@@ -69,6 +85,30 @@ export function IndexPanel({ root, status, watchStatus, error, onRootChange, onS
         </div>
         <p className="field-help">Enter a full folder path. A native folder picker will arrive with desktop packaging.</p>
       </form>
+
+      <section className="exclusion-settings" aria-labelledby="exclusion-heading">
+        <div>
+          <h3 id="exclusion-heading">Folders to skip</h3>
+          <p className="field-help">One path per line, relative to the selected folder. Built-in system exclusions remain active.</p>
+        </div>
+        <textarea
+          aria-label="Folders to skip"
+          value={exclusionText}
+          onChange={(event) => onExclusionTextChange(event.target.value)}
+          placeholder={'Private\nArchive\\Old'}
+          rows={3}
+          disabled={hasActiveJob || !status?.root}
+        />
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={hasActiveJob || !status?.root}
+          onClick={() => void onSaveExclusions()}
+        >
+          Save exclusions
+        </button>
+        <p className="field-help">Saving refreshes the local index. DeepFind never deletes or changes the source folders.</p>
+      </section>
 
       {error ? <p className="message error-message" role="alert">{error}</p> : null}
 

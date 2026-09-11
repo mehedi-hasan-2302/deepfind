@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import {
   DeepFindApiError,
   getIndexWatchStatus,
+  getIndexExclusions,
   getIndexStatus,
   pauseIndex,
   refreshIndex,
   resumeIndex,
   searchFiles,
   startIndex,
+  updateIndexExclusions,
   type IndexStatus,
   type IndexWatchStatus,
   type SearchResponse,
@@ -25,6 +27,7 @@ function App() {
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null)
   const [watchStatus, setWatchStatus] = useState<IndexWatchStatus | null>(null)
   const [indexError, setIndexError] = useState<string | null>(null)
+  const [exclusionText, setExclusionText] = useState('')
   const [query, setQuery] = useState('')
   const [searchResponse, setSearchResponse] = useState<SearchResponse | null>(null)
   const [searchLoading, setSearchLoading] = useState(false)
@@ -46,6 +49,23 @@ function App() {
       })
     return () => controller.abort()
   }, [])
+
+  useEffect(() => {
+    const selectedRoot = indexStatus?.root
+    if (!selectedRoot) {
+      setExclusionText('')
+      return
+    }
+    const controller = new AbortController()
+    void getIndexExclusions(controller.signal)
+      .then((settings) => {
+        if (settings.root === selectedRoot) setExclusionText((settings.paths ?? []).join('\n'))
+      })
+      .catch((error: unknown) => {
+        if (!isAbort(error)) setIndexError(errorMessage(error))
+      })
+    return () => controller.abort()
+  }, [indexStatus?.root])
 
   useEffect(() => {
     let active = true
@@ -204,6 +224,18 @@ function App() {
     }
   }
 
+  async function saveExclusions() {
+    setIndexError(null)
+    try {
+      const paths = exclusionText.split(/\r?\n/).map((path) => path.trim()).filter(Boolean)
+      const response = await updateIndexExclusions(paths)
+      setExclusionText(response.paths.join('\n'))
+      setIndexStatus(response.reconciliation)
+    } catch (error) {
+      setIndexError(errorMessage(error))
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -234,6 +266,9 @@ function App() {
           onRefresh={refreshSelectedRoot}
           onPause={pauseIndexing}
           onResume={resumeIndexing}
+          exclusionText={exclusionText}
+          onExclusionTextChange={setExclusionText}
+          onSaveExclusions={saveExclusions}
         />
         <SearchPanel
           query={query}

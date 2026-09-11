@@ -6,6 +6,7 @@ import com.deepfind.filesystem.DiscoveryProgress;
 import com.deepfind.filesystem.ExclusionPolicy;
 import com.deepfind.filesystem.FileMetadata;
 import com.deepfind.filesystem.PathNormalizer;
+import com.deepfind.filesystem.RootExclusionService;
 import com.deepfind.index.IndexWatchLifecycle;
 import com.deepfind.index.IndexingPausedException;
 import com.deepfind.index.MetadataIndexingOutcome;
@@ -21,8 +22,10 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -52,6 +55,7 @@ public class IndexingJobService {
     private final RootCatalog rootCatalog;
     private final ScanHistoryRepository scanHistory;
     private final IndexWatchLifecycle watchLifecycle;
+    private final RootExclusionService rootExclusions;
     private final Clock clock;
     private final ExecutorService executor;
     private final AtomicReference<IndexingJobStatus> status;
@@ -63,13 +67,15 @@ public class IndexingJobService {
             RootCatalog rootCatalog,
             ScanHistoryRepository scanHistory,
             IndexWatchLifecycle watchLifecycle,
-            MetadataReconciliationService reconciliationService) {
+            MetadataReconciliationService reconciliationService,
+            RootExclusionService rootExclusions) {
         this(
                 indexingService,
                 reconciliationService,
                 rootCatalog,
                 scanHistory,
                 watchLifecycle,
+                rootExclusions,
                 Clock.systemUTC(),
                 Executors.newSingleThreadExecutor(runnable -> {
                     Thread thread = new Thread(runnable, "deepfind-indexer");
@@ -84,7 +90,7 @@ public class IndexingJobService {
             ScanHistoryRepository scanHistory,
             Clock clock,
             ExecutorService executor) {
-        this(indexingService, null, rootCatalog, scanHistory, ignoredLifecycle(), clock, executor);
+        this(indexingService, null, rootCatalog, scanHistory, ignoredLifecycle(), null, clock, executor);
     }
 
     IndexingJobService(
@@ -94,7 +100,7 @@ public class IndexingJobService {
             IndexWatchLifecycle watchLifecycle,
             Clock clock,
             ExecutorService executor) {
-        this(indexingService, null, rootCatalog, scanHistory, watchLifecycle, clock, executor);
+        this(indexingService, null, rootCatalog, scanHistory, watchLifecycle, null, clock, executor);
     }
 
     IndexingJobService(
@@ -105,11 +111,24 @@ public class IndexingJobService {
             IndexWatchLifecycle watchLifecycle,
             Clock clock,
             ExecutorService executor) {
+        this(indexingService, reconciliationService, rootCatalog, scanHistory, watchLifecycle, null, clock, executor);
+    }
+
+    IndexingJobService(
+            MetadataIndexingService indexingService,
+            MetadataReconciliationService reconciliationService,
+            RootCatalog rootCatalog,
+            ScanHistoryRepository scanHistory,
+            IndexWatchLifecycle watchLifecycle,
+            RootExclusionService rootExclusions,
+            Clock clock,
+            ExecutorService executor) {
         this.indexingService = Objects.requireNonNull(indexingService, "indexingService must not be null");
         this.reconciliationService = reconciliationService;
         this.rootCatalog = Objects.requireNonNull(rootCatalog, "rootCatalog must not be null");
         this.scanHistory = Objects.requireNonNull(scanHistory, "scanHistory must not be null");
         this.watchLifecycle = Objects.requireNonNull(watchLifecycle, "watchLifecycle must not be null");
+        this.rootExclusions = rootExclusions;
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
         this.executor = Objects.requireNonNull(executor, "executor must not be null");
         var recovered = scanHistory.interruptRunningJobs(clock.instant(), INTERRUPTED_MESSAGE);
@@ -190,6 +209,26 @@ public class IndexingJobService {
         return schedule(current.root(), false, true);
     }
 
+    public synchronized IndexingJobStatus updateExclusions(Collection<String> paths) {
+        if (isActive(status.get().state())) {
+            throw new IndexingAlreadyRunningException();
+        }
+        Path root = rootCatalog.lastSelectedRoot().orElseThrow(NoIndexRootSelectedException::new);
+        if (!Files.isDirectory(root) || !Files.isReadable(root)) {
+            throw new IndexRootNotAccessibleException("DeepFind cannot read the selected folder.");
+        }
+        if (reconciliationService == null || rootExclusions == null) {
+            throw new IllegalStateException("Folder exclusions are unavailable.");
+        }
+        Path absoluteRoot = PathNormalizer.absolute(root);
+        rootExclusions.replace(absoluteRoot, paths, clock.instant());
+        return schedule(absoluteRoot, false, true);
+    }
+
+    public Optional<Path> selectedRoot() {
+        return rootCatalog.lastSelectedRoot();
+    }
+
     private IndexingJobStatus schedule(Path root, boolean rememberSelection, boolean reconciliation) {
         Instant startedAt = clock.instant();
         if (rememberSelection) {
@@ -253,9 +292,11 @@ public class IndexingJobService {
                     }
                 }
             };
+            ExclusionPolicy exclusions =
+                    rootExclusions == null ? ExclusionPolicy.defaults() : rootExclusions.policyFor(started.root());
             MetadataIndexingOutcome outcome = reconciliation
-                    ? reconciliationService.reconcileRoot(started.root(), ExclusionPolicy.defaults(), observer)
-                    : indexingService.indexRoot(started.root(), ExclusionPolicy.defaults(), observer);
+                    ? reconciliationService.reconcileRoot(started.root(), exclusions, observer)
+                    : indexingService.indexRoot(started.root(), exclusions, observer);
             synchronized (this) {
                 var finishedAt = clock.instant();
                 pauseRequestedJob.compareAndSet(started.jobId(), null);

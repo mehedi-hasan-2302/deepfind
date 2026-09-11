@@ -2,6 +2,7 @@ package com.deepfind.index;
 
 import com.deepfind.filesystem.ExclusionPolicy;
 import com.deepfind.filesystem.PathNormalizer;
+import com.deepfind.filesystem.RootExclusionService;
 import com.deepfind.filesystem.watch.FileWatchSession;
 import com.deepfind.filesystem.watch.RecursiveFileWatcher;
 import com.deepfind.persistence.RootCatalog;
@@ -13,6 +14,7 @@ import java.nio.file.Path;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -28,15 +30,26 @@ public final class IndexWatchCoordinator implements IndexWatchLifecycle {
     private final RootCatalog rootCatalog;
     private final RecursiveFileWatcher watcher;
     private final IncrementalIndexingService incrementalIndexing;
+    private final RootExclusionService rootExclusions;
 
     private ActiveWatch active;
     private IndexWatchStatus status = new IndexWatchStatus(null, IndexWatchState.STOPPED, STOPPED_MESSAGE);
 
     public IndexWatchCoordinator(
             RootCatalog rootCatalog, RecursiveFileWatcher watcher, IncrementalIndexingService incrementalIndexing) {
+        this(rootCatalog, watcher, incrementalIndexing, null);
+    }
+
+    @Autowired
+    public IndexWatchCoordinator(
+            RootCatalog rootCatalog,
+            RecursiveFileWatcher watcher,
+            IncrementalIndexingService incrementalIndexing,
+            RootExclusionService rootExclusions) {
         this.rootCatalog = Objects.requireNonNull(rootCatalog, "rootCatalog must not be null");
         this.watcher = Objects.requireNonNull(watcher, "watcher must not be null");
         this.incrementalIndexing = Objects.requireNonNull(incrementalIndexing, "incrementalIndexing must not be null");
+        this.rootExclusions = rootExclusions;
     }
 
     @PostConstruct
@@ -64,7 +77,8 @@ public final class IndexWatchCoordinator implements IndexWatchLifecycle {
 
         IncrementalIndexingSession indexingSession = null;
         try {
-            ExclusionPolicy exclusions = ExclusionPolicy.defaults();
+            ExclusionPolicy exclusions =
+                    rootExclusions == null ? ExclusionPolicy.defaults() : rootExclusions.policyFor(root);
             indexingSession = incrementalIndexing.openSession(root, exclusions);
             FileWatchSession watchSession = watcher.watch(root, exclusions, indexingSession);
             active = new ActiveWatch(root, watchSession, indexingSession);
