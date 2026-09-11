@@ -73,6 +73,22 @@ class TikaDocumentParserTests {
         assertThatThrownBy(() -> parser.parse(pdf, 10_000)).isInstanceOf(DocumentParsingException.class);
     }
 
+    @Test
+    void doesNotResolveExternalXmlEntities() throws Exception {
+        String privateToken = "external-entity-private-token";
+        Path privateFile = Files.writeString(root.resolve("private.txt"), privateToken);
+        Path xml = Files.writeString(
+                root.resolve("hostile.xml"),
+                "<!DOCTYPE root [<!ENTITY external SYSTEM \"" + privateFile.toUri() + "\">]><root>&external;</root>");
+
+        try {
+            ParsedDocument document = parser.parse(xml, 10_000);
+            assertThat(document.content()).doesNotContain(privateToken);
+        } catch (DocumentParsingException expected) {
+            assertThat(expected).isNotNull();
+        }
+    }
+
     private static void writePdf(Path path, String text) throws IOException {
         try (PDDocument document = new PDDocument()) {
             PDPage page = new PDPage();

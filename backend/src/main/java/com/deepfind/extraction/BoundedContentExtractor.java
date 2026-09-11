@@ -4,10 +4,13 @@ import com.deepfind.config.DeepFindExtractionProperties;
 import java.io.IOException;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
@@ -48,38 +51,40 @@ public final class BoundedContentExtractor implements ContentExtractor, AutoClos
         if (!policy.supportsExtension(path)) {
             return ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "EXTENSION_NOT_SUPPORTED");
         }
-        try {
-            if (Files.size(path) > maxFileSizeBytes) {
-                return ExtractionResult.outcome(ExtractionStatus.SKIPPED_TOO_LARGE, "", "FILE_SIZE_LIMIT_EXCEEDED");
-            }
-        } catch (AccessDeniedException | SecurityException exception) {
-            return ExtractionResult.outcome(ExtractionStatus.PERMISSION_DENIED, "", "FILE_NOT_READABLE");
-        } catch (IOException exception) {
-            return ExtractionResult.outcome(ExtractionStatus.PARSE_ERROR, "", "FILE_UNAVAILABLE");
+        ExtractionResult rejectedInput = rejectUnsafeInput(path);
+        if (rejectedInput != null) {
+            return rejectedInput;
         }
 
         Future<ExtractionResult> extraction;
         try {
             extraction = executor.submit(() -> extractSupported(path));
         } catch (RejectedExecutionException exception) {
-            return ExtractionResult.outcome(ExtractionStatus.TIMEOUT, "", "EXTRACTION_CAPACITY_EXCEEDED");
+            String reason = executor.isShutdown() ? "EXTRACTOR_SHUTDOWN" : "EXTRACTION_CAPACITY_EXCEEDED";
+            return ExtractionResult.outcome(ExtractionStatus.TIMEOUT, "", reason);
         }
 
         try {
             return extraction.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException exception) {
-            extraction.cancel(true);
+            cancelAndPurge(extraction);
             return ExtractionResult.outcome(ExtractionStatus.TIMEOUT, "", "EXTRACTION_DEADLINE_EXCEEDED");
         } catch (InterruptedException exception) {
-            extraction.cancel(true);
+            cancelAndPurge(extraction);
             Thread.currentThread().interrupt();
             return ExtractionResult.outcome(ExtractionStatus.TIMEOUT, "", "EXTRACTION_INTERRUPTED");
+        } catch (CancellationException exception) {
+            return ExtractionResult.outcome(ExtractionStatus.TIMEOUT, "", "EXTRACTOR_SHUTDOWN");
         } catch (ExecutionException exception) {
             return ExtractionResult.outcome(ExtractionStatus.PARSE_ERROR, "", "UNEXPECTED_PARSER_FAILURE");
         }
     }
 
     private ExtractionResult extractSupported(Path path) {
+        ExtractionResult rejectedInput = rejectUnsafeInput(path);
+        if (rejectedInput != null) {
+            return rejectedInput;
+        }
         String mediaType = "";
         try {
             mediaType = parser.detectMediaType(path);
@@ -103,7 +108,41 @@ public final class BoundedContentExtractor implements ContentExtractor, AutoClos
 
     @Override
     public void close() {
-        executor.shutdownNow();
+        executor.shutdownNow().forEach(task -> {
+            if (task instanceof Future<?> future) {
+                future.cancel(false);
+            }
+        });
+        executor.purge();
+        try {
+            long waitMillis = Math.max(1, Math.min(timeout.toMillis(), 1_000));
+            executor.awaitTermination(waitMillis, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private ExtractionResult rejectUnsafeInput(Path path) {
+        try {
+            BasicFileAttributes attributes =
+                    Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+            if (!attributes.isRegularFile()) {
+                return ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "INPUT_NOT_REGULAR_FILE");
+            }
+            if (attributes.size() > maxFileSizeBytes) {
+                return ExtractionResult.outcome(ExtractionStatus.SKIPPED_TOO_LARGE, "", "FILE_SIZE_LIMIT_EXCEEDED");
+            }
+            return null;
+        } catch (AccessDeniedException | SecurityException exception) {
+            return ExtractionResult.outcome(ExtractionStatus.PERMISSION_DENIED, "", "FILE_NOT_READABLE");
+        } catch (IOException exception) {
+            return ExtractionResult.outcome(ExtractionStatus.PARSE_ERROR, "", "FILE_UNAVAILABLE");
+        }
+    }
+
+    private void cancelAndPurge(Future<ExtractionResult> extraction) {
+        extraction.cancel(true);
+        executor.purge();
     }
 
     private static ThreadFactory daemonThreadFactory() {

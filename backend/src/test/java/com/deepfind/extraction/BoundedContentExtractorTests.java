@@ -8,7 +8,12 @@ import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -40,6 +45,43 @@ class BoundedContentExtractorTests {
         try (BoundedContentExtractor extractor = extractor(parser, 4, 1_000, Duration.ofSeconds(1))) {
             assertThat(extractor.extract(unsupported).status()).isEqualTo(ExtractionStatus.UNSUPPORTED);
             assertThat(extractor.extract(oversized).status()).isEqualTo(ExtractionStatus.SKIPPED_TOO_LARGE);
+            assertThat(calls).hasValue(0);
+        }
+    }
+
+    @Test
+    void rejectsNonRegularInputsWithoutCallingTheParser() throws IOException {
+        AtomicInteger calls = new AtomicInteger();
+        Path directoryWithSupportedExtension = Files.createDirectory(root.resolve("folder.txt"));
+
+        try (BoundedContentExtractor extractor =
+                extractor(countingParser(calls), 1_000, 1_000, Duration.ofSeconds(1))) {
+            ExtractionResult result = extractor.extract(directoryWithSupportedExtension);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.UNSUPPORTED);
+            assertThat(result.reason()).isEqualTo("INPUT_NOT_REGULAR_FILE");
+            assertThat(calls).hasValue(0);
+        }
+    }
+
+    @Test
+    void rejectsSymbolicLinkInputsWithoutFollowingThem() throws IOException {
+        AtomicInteger calls = new AtomicInteger();
+        Path target = Files.writeString(root.resolve("private-target.txt"), "private target content");
+        Path link = root.resolve("linked.txt");
+        try {
+            Files.createSymbolicLink(link, target);
+        } catch (UnsupportedOperationException | IOException | SecurityException exception) {
+            Assumptions.abort("Host does not permit symbolic-link creation: "
+                    + exception.getClass().getSimpleName());
+        }
+
+        try (BoundedContentExtractor extractor =
+                extractor(countingParser(calls), 1_000, 1_000, Duration.ofSeconds(1))) {
+            ExtractionResult result = extractor.extract(link);
+
+            assertThat(result.status()).isEqualTo(ExtractionStatus.UNSUPPORTED);
+            assertThat(result.reason()).isEqualTo("INPUT_NOT_REGULAR_FILE");
             assertThat(calls).hasValue(0);
         }
     }
@@ -123,6 +165,74 @@ class BoundedContentExtractorTests {
         }
     }
 
+    @Test
+    void purgesCancelledQueuedWorkWhenAParserIgnoresInterruption() throws Exception {
+        Path first = Files.writeString(root.resolve("first.txt"), "first");
+        Path second = Files.writeString(root.resolve("second.txt"), "second");
+        Path third = Files.writeString(root.resolve("third.txt"), "third");
+        CountDownLatch parserStarted = new CountDownLatch(1);
+        CountDownLatch releaseParser = new CountDownLatch(1);
+        BoundedContentExtractor extractor = new BoundedContentExtractor(
+                interruptionIgnoringParser(parserStarted, releaseParser),
+                new DeepFindExtractionProperties(1_000, 1_000, Duration.ofMillis(40), 1, 1));
+        try {
+            ExtractionResult firstResult = extractor.extract(first);
+            assertThat(parserStarted.await(1, TimeUnit.SECONDS)).isTrue();
+            ExtractionResult secondResult = extractor.extract(second);
+            ExtractionResult thirdResult = extractor.extract(third);
+
+            assertThat(firstResult.reason()).isEqualTo("EXTRACTION_DEADLINE_EXCEEDED");
+            assertThat(secondResult.reason()).isEqualTo("EXTRACTION_DEADLINE_EXCEEDED");
+            assertThat(thirdResult.reason()).isEqualTo("EXTRACTION_DEADLINE_EXCEEDED");
+        } finally {
+            releaseParser.countDown();
+            extractor.close();
+        }
+    }
+
+    @Test
+    void preservesCallerInterruptionWhileCancellingParserWork() throws Exception {
+        Path file = Files.writeString(root.resolve("interrupt.txt"), "interrupt");
+        CountDownLatch parserStarted = new CountDownLatch(1);
+        CountDownLatch releaseParser = new CountDownLatch(1);
+        AtomicReference<ExtractionResult> result = new AtomicReference<>();
+        AtomicBoolean callerInterruptPreserved = new AtomicBoolean();
+        BoundedContentExtractor extractor = new BoundedContentExtractor(
+                interruptionIgnoringParser(parserStarted, releaseParser),
+                new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(5), 1, 1));
+        Thread caller = Thread.ofPlatform().start(() -> {
+            result.set(extractor.extract(file));
+            callerInterruptPreserved.set(Thread.currentThread().isInterrupted());
+        });
+        try {
+            assertThat(parserStarted.await(1, TimeUnit.SECONDS)).isTrue();
+            caller.interrupt();
+            caller.join(2_000);
+
+            assertThat(caller.isAlive()).isFalse();
+            assertThat(result.get().status()).isEqualTo(ExtractionStatus.TIMEOUT);
+            assertThat(result.get().reason()).isEqualTo("EXTRACTION_INTERRUPTED");
+            assertThat(callerInterruptPreserved).isTrue();
+        } finally {
+            releaseParser.countDown();
+            extractor.close();
+        }
+    }
+
+    @Test
+    void reportsExtractorShutdownWithoutInvokingTheParser() throws IOException {
+        AtomicInteger calls = new AtomicInteger();
+        Path file = Files.writeString(root.resolve("after-close.txt"), "closed");
+        BoundedContentExtractor extractor = extractor(countingParser(calls), 1_000, 1_000, Duration.ofSeconds(1));
+
+        extractor.close();
+        ExtractionResult result = extractor.extract(file);
+
+        assertThat(result.status()).isEqualTo(ExtractionStatus.TIMEOUT);
+        assertThat(result.reason()).isEqualTo("EXTRACTOR_SHUTDOWN");
+        assertThat(calls).hasValue(0);
+    }
+
     private static BoundedContentExtractor extractor(
             DocumentParser parser, long maxBytes, int maxCharacters, Duration timeout) {
         return new BoundedContentExtractor(
@@ -149,6 +259,23 @@ class BoundedContentExtractorTests {
             @Override
             public ParsedDocument parse(Path path, int characterLimit) {
                 return new ParsedDocument(content, mediaType, false);
+            }
+        };
+    }
+
+    private static DocumentParser interruptionIgnoringParser(CountDownLatch started, CountDownLatch release) {
+        return new StubParser() {
+            @Override
+            public ParsedDocument parse(Path path, int characterLimit) {
+                started.countDown();
+                while (release.getCount() > 0) {
+                    try {
+                        release.await();
+                    } catch (InterruptedException ignored) {
+                        // Deliberately model a parser that ignores cooperative cancellation.
+                    }
+                }
+                return new ParsedDocument("late", "text/plain", false);
             }
         };
     }
