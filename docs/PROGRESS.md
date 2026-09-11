@@ -6,10 +6,12 @@ Phase 8 — Desktop Packaging (in progress)
 
 ## Last completed step
 
-STEP 28 — Choose the Windows desktop shell and bundled-runtime architecture.
+STEP 30 — Compile and open the native Tauri desktop shell.
 
 ## Completed
 
+- STEP 30: Rust 1.98.1/MSVC toolchain installed, Tauri 2.11.5 shell compiled, bundled local page verified in a real Windows window through accessibility, and window closed successfully. Screenshot capture is unavailable on this Windows capture interface (`SetIsBorderRequired`, 0x80004002); accessibility verification works. The first executable is a shell spike, not yet the final integrated application.
+- STEP 29: desktop Maven resource profile, production UI CSP/security headers, inherited-pipe readiness/shutdown protocol, repeatable preparation script, and private Java 21 image. Isolated bundled-runtime smoke testing passed text/PDF/DOCX extraction, live watching, SQLite/Lucene restart persistence, and graceful shutdown. Rust and Microsoft C++ Build Tools 2022 are installed; native shell compilation is in progress.
 - Java 21 / Spring Boot 4.1.1 backend with Maven Wrapper, formatting gate, loopback-only configuration, and `/api/health`.
 - React 19 / TypeScript / Vite frontend with a responsive foundation screen and local-first privacy copy.
 - Backend and frontend tests, ESLint, production build, EditorConfig, `.gitignore`, and GitHub Actions CI.
@@ -220,11 +222,13 @@ The user can index a local folder, safely pause after bounded in-flight work, an
 
 ## Known failures
 
+STEP 29 verification: 107 backend tests discovered (104 passing, 3 skipped), 14 frontend tests passing; `scripts/prepare-desktop.ps1` and `scripts/test-desktop-runtime.ps1` passed. The first native compile ran before the C++ toolchain installation finished and failed with missing `link.exe`; it is now being retried. An intermediate packaging run failed the formatter on newly added lifecycle files; formatting was applied and the complete run passed.
+
 No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. In restricted Windows environments Maven clean/Spotless may need permission to replace the generated `backend\target` tree. Rust/Cargo and the Windows installer toolchain are not installed yet, so no desktop executable exists. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Native watch providers may duplicate, coalesce, reorder, or overflow events; scheduled reconciliation repairs uncertainty eventually, not as an atomic snapshot. Extraction timeouts use cooperative thread interruption, not hard process isolation; cancelled queue entries are purged, but a parser that ignores interruption can retain one bounded worker until it exits. No-follow checks reject static symbolic links, but a same-user process can still replace a path after the worker's final check. The runtime connection audit is sampled evidence rather than proof of every possible third-party path and must be rerun after dependency, parser, or packaging changes. Build tools still contact configured dependency repositories. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths, failure descriptions, counters, and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced. Interrupted runs restart as full root reconciliation scans rather than unsafe mid-tree continuation.
 
 ## Next recommended step
 
-Install the Rust/Tauri build prerequisites with explicit approval, then bootstrap a minimal Tauri 2 shell that opens only bundled local assets before connecting it to the Java backend.
+Finish native shell compilation and window verification, connect the tested bundled backend, and produce the per-user NSIS installer. No installer is ready yet.
 
 ## Important architectural notes
 
