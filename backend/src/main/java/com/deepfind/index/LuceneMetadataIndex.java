@@ -51,8 +51,12 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.QueryBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class LuceneMetadataIndex implements AutoCloseable {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(LuceneMetadataIndex.class);
 
     private static final int MAX_RESULT_LIMIT = 1_000;
     private static final int MAX_RESULT_OFFSET = 10_000;
@@ -203,6 +207,7 @@ public final class LuceneMetadataIndex implements AutoCloseable {
         try {
             writer.commit();
             searcherManager.maybeRefreshBlocking();
+            LOGGER.info("event=index_commit_completed");
         } catch (IOException exception) {
             throw new IndexAccessException("DeepFind could not commit the local search index.", exception);
         }

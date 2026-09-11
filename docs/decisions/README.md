@@ -27,3 +27,4 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0023 — Pause indexing as a durable safe stop](0023-durable-safe-stop-index-pause.md)
 - [0024 — Persist root-relative folder exclusions](0024-persist-root-relative-folder-exclusions.md)
 - [0025 — Harden the loopback API browser boundary](0025-harden-loopback-api-browser-boundary.md)
+- [0026 — Use privacy-safe structured operational logs](0026-use-privacy-safe-structured-logs.md)

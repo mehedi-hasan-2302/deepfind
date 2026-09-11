@@ -1,5 +1,7 @@
 package com.deepfind.index;
 
+import static com.deepfind.diagnostics.PrivacySafeDiagnostics.exceptionType;
+
 import com.deepfind.filesystem.ExclusionPolicy;
 import com.deepfind.filesystem.PathNormalizer;
 import com.deepfind.filesystem.RootExclusionService;
@@ -72,6 +74,7 @@ public final class IndexWatchCoordinator implements IndexWatchLifecycle {
                 || Files.isSymbolicLink(root)
                 || !Files.isReadable(root)) {
             status = new IndexWatchStatus(root, IndexWatchState.FAILED, FAILED_MESSAGE);
+            LOGGER.warn("event=watch_start_failed reason=ROOT_UNAVAILABLE");
             return;
         }
 
@@ -83,12 +86,11 @@ public final class IndexWatchCoordinator implements IndexWatchLifecycle {
             FileWatchSession watchSession = watcher.watch(root, exclusions, indexingSession);
             active = new ActiveWatch(root, watchSession, indexingSession);
             status = currentStatus(active);
+            LOGGER.info("event=watch_started");
         } catch (RuntimeException exception) {
             closeIncremental(indexingSession);
             status = new IndexWatchStatus(root, IndexWatchState.FAILED, FAILED_MESSAGE);
-            LOGGER.error(
-                    "Filesystem change tracking failed to start: {}.",
-                    exception.getClass().getSimpleName());
+            LOGGER.error("event=watch_start_failed exception={}", exceptionType(exception));
         }
     }
 
@@ -97,6 +99,7 @@ public final class IndexWatchCoordinator implements IndexWatchLifecycle {
         Path previousRoot = active == null ? status.root() : active.root();
         stopActive();
         status = new IndexWatchStatus(previousRoot, IndexWatchState.STOPPED, STOPPED_MESSAGE);
+        LOGGER.info("event=watch_stopped");
     }
 
     public synchronized IndexWatchStatus status() {

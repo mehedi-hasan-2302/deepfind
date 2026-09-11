@@ -1,5 +1,10 @@
 # Troubleshooting
 
+## Logs and diagnostics
+
+- Runtime diagnostics are console-only `event=... key=value` records. They intentionally omit full paths, queries, extracted text, parser details, exception messages, and stack traces. Use the event name, job identifier, fixed reason/status, and counters when reporting a problem.
+- Do not enable verbose Spring, Flyway, Tika, PDFBox, POI, JDBC, or HTTP-body logging when working with private files. A future diagnostics export must be explicit and clearly disclose any additional local data before collecting it.
+
 ## Backend does not start
 
 - Confirm Java 21 with `java -version`.

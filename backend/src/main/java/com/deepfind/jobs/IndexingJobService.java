@@ -1,5 +1,7 @@
 package com.deepfind.jobs;
 
+import static com.deepfind.diagnostics.PrivacySafeDiagnostics.exceptionType;
+
 import com.deepfind.filesystem.DiscoveryFailure;
 import com.deepfind.filesystem.DiscoveryObserver;
 import com.deepfind.filesystem.DiscoveryProgress;
@@ -239,6 +241,7 @@ public class IndexingJobService {
         watchLifecycle.pause();
         IndexingJobStatus started = IndexingJobStatus.running(jobId, root, startedAt);
         status.set(started);
+        LOGGER.info("event=index_job_started jobId={} mode={}", jobId, reconciliation ? "RECONCILIATION" : "FULL");
         executor.submit(() -> run(started, reconciliation));
         return started;
     }
@@ -267,6 +270,7 @@ public class IndexingJobService {
                 @Override
                 public void onFailure(DiscoveryFailure failure) {
                     status.updateAndGet(current -> current.withFailure(failure));
+                    LOGGER.warn("event=index_entry_failed jobId={} reason={}", started.jobId(), failure.reason());
                     scanHistory.recordFailure(
                             started.jobId(),
                             failure.path(),
@@ -303,6 +307,12 @@ public class IndexingJobService {
                 rootCatalog.markIndexed(started.root(), finishedAt);
                 scanHistory.finish(started.jobId(), ScanJobState.COMPLETED, metrics(outcome), null, finishedAt);
                 status.updateAndGet(current -> current.completed(outcome, finishedAt));
+                LOGGER.info(
+                        "event=index_job_completed jobId={} entriesDiscovered={} entriesIndexed={} failures={}",
+                        started.jobId(),
+                        outcome.discovery().entriesDiscovered(),
+                        outcome.entriesIndexed(),
+                        outcome.discovery().failures());
             }
         } catch (IndexingPausedException exception) {
             synchronized (this) {
@@ -314,23 +324,26 @@ public class IndexingJobService {
                     scanHistory.markPaused(
                             started.jobId(), paused.currentPath(), metrics(paused), PAUSED_MESSAGE, pausedAt);
                     status.set(paused);
+                    LOGGER.info(
+                            "event=index_job_paused jobId={} entriesDiscovered={} entriesIndexed={} failures={}",
+                            started.jobId(),
+                            paused.entriesDiscovered(),
+                            paused.entriesIndexed(),
+                            paused.failures());
                 }
             }
         } catch (RuntimeException exception) {
             synchronized (this) {
                 Instant failedAt = clock.instant();
                 IndexingJobStatus failed = status.get().failed(FAILED_MESSAGE, failedAt);
-                LOGGER.error(
-                        "Indexing job {} failed with {}.",
-                        started.jobId(),
-                        exception.getClass().getSimpleName());
+                LOGGER.error("event=index_job_failed jobId={} exception={}", started.jobId(), exceptionType(exception));
                 try {
                     scanHistory.finish(started.jobId(), ScanJobState.FAILED, metrics(failed), FAILED_MESSAGE, failedAt);
                 } catch (RuntimeException persistenceException) {
                     LOGGER.error(
-                            "Indexing job {} failure state could not be persisted: {}.",
+                            "event=index_job_failure_persistence_failed jobId={} exception={}",
                             started.jobId(),
-                            persistenceException.getClass().getSimpleName());
+                            exceptionType(persistenceException));
                 } finally {
                     status.set(failed);
                 }
@@ -340,9 +353,7 @@ public class IndexingJobService {
                 watchLifecycle.watch(started.root());
             } catch (RuntimeException exception) {
                 LOGGER.error(
-                        "Filesystem change tracking could not resume after indexing job {}: {}.",
-                        started.jobId(),
-                        exception.getClass().getSimpleName());
+                        "event=watch_resume_failed jobId={} exception={}", started.jobId(), exceptionType(exception));
             }
         }
     }

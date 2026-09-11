@@ -75,6 +75,10 @@ The current timeout uses interruption of an in-process parser worker. It bounds 
 
 The backend binds to `127.0.0.1`, never `0.0.0.0`. `LocalApiRequestFilter` rejects non-loopback Host/Origin/Referer metadata and explicit cross-site fetches. Every unsafe HTTP method also requires the fixed `X-DeepFind-Client: browser` header, which prevents ordinary cross-site form submission and forces browser fetches through preflight when cross-origin. The value is intentionally documented and is not authentication against same-device processes. API responses disable storage/sniffing and restrict cross-origin resource use. No CORS allowlist is installed, and the unused Actuator dependency and routes are absent. See ADR 0025.
 
+## Diagnostics and logging
+
+Application-owned console logs use stable `event=... key=value` records containing only job identifiers, bounded counters, fixed operation names, enums, and exception class names. Paths, queries, extracted content, parser-provided fields, exception messages, request bodies, and throwable stacks are not logger arguments. Spring detailed startup INFO is disabled, third-party output defaults to WARN, and direct Flyway/Tika/PDFBox/POI logging is disabled. Database migration failures are translated into a path-free event and safe startup exception. Watcher and incremental-worker threads have fixed names rather than root-derived hashes. SQLite scan history remains intentionally path-bearing local application state, not a log. See ADR 0026.
+
 ## Runtime configuration and API
 
 Spring owns one Lucene index lifecycle and closes it on shutdown. The index defaults to `${user.home}/.deepfind/index`; `DEEPFIND_DATA_DIRECTORY` overrides the shared parent data directory for packaging and tests. A SQLite database at `<data-directory>/deepfind.db` stores normalized indexed-root records and generic application settings. Flyway migrates it before persistence-backed services initialize. SQLite foreign keys, a five-second busy timeout, write-ahead logging, and normal synchronous mode are configured on each connection. Startup fails on invalid migrations or database corruption instead of deleting state.

@@ -21,6 +21,7 @@ import com.deepfind.persistence.ScanHistoryRepository;
 import com.deepfind.persistence.ScanJobMetrics;
 import com.deepfind.persistence.ScanJobRecord;
 import com.deepfind.persistence.ScanJobState;
+import com.deepfind.testing.LogCapture;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -246,11 +247,13 @@ class IndexingJobServiceTests {
 
     @Test
     void persistsATerminalFailureWhenIndexingStopsUnexpectedly() throws Exception {
+        String privateFailure = root.resolve("Private salary expectation.txt") + " contained secret-query";
         RecordingScanHistory history = new RecordingScanHistory(null);
         ExecutorService executor = Executors.newSingleThreadExecutor();
-        try (LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("index-failure"))) {
+        try (LogCapture logs = LogCapture.forClass(IndexingJobService.class);
+                LuceneMetadataIndex index = new LuceneMetadataIndex(root.resolve("index-failure"))) {
             MetadataIndexingService indexing = new MetadataIndexingService(
-                    new FailingDiscoveryService(),
+                    new FailingDiscoveryService(privateFailure),
                     index,
                     path -> ExtractionResult.outcome(ExtractionStatus.UNSUPPORTED, "", "TEST_METADATA_ONLY"),
                     new DeepFindExtractionProperties(1_000, 1_000, Duration.ofSeconds(1), 1, 2));
@@ -267,6 +270,12 @@ class IndexingJobServiceTests {
                 assertThat(jobs.status().state()).isEqualTo(IndexingJobState.FAILED);
                 assertThat(history.finishedState).isEqualTo(ScanJobState.FAILED);
                 assertThat(history.finishedMetrics).isEqualTo(ScanJobMetrics.empty());
+                assertThat(logs.messages())
+                        .anyMatch(message -> message.startsWith("event=index_job_started jobId="))
+                        .anyMatch(message -> message.contains("event=index_job_failed")
+                                && message.contains("exception=IllegalStateException"))
+                        .allSatisfy(message -> assertThat(message)
+                                .doesNotContain(privateFailure, root.toString(), "salary expectation", "secret-query"));
             } finally {
                 jobs.shutdown();
             }
@@ -373,9 +382,15 @@ class IndexingJobServiceTests {
 
     private static final class FailingDiscoveryService extends FileSystemDiscoveryService {
 
+        private final String message;
+
+        private FailingDiscoveryService(String message) {
+            this.message = message;
+        }
+
         @Override
         public DiscoverySummary discover(Path root, ExclusionPolicy exclusions, DiscoveryObserver observer) {
-            throw new IllegalStateException("simulated indexing failure");
+            throw new IllegalStateException(message);
         }
     }
 

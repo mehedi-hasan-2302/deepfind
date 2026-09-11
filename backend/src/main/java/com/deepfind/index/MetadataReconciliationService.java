@@ -1,5 +1,7 @@
 package com.deepfind.index;
 
+import static com.deepfind.diagnostics.PrivacySafeDiagnostics.logExtractionOutcome;
+
 import com.deepfind.config.DeepFindExtractionProperties;
 import com.deepfind.extraction.ContentExtractor;
 import com.deepfind.extraction.ExtractionResult;
@@ -19,10 +21,14 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public final class MetadataReconciliationService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(MetadataReconciliationService.class);
 
     private final FileSystemDiscoveryService discoveryService;
     private final LuceneMetadataIndex index;
@@ -104,6 +110,7 @@ public final class MetadataReconciliationService {
         }
         try {
             ExtractionResult extraction = contentExtractor.extract(metadata.absolutePath());
+            logExtractionOutcome(LOGGER, extraction);
             index.upsertContent(metadata, extraction);
         } catch (RuntimeException exception) {
             failure.compareAndSet(null, exception);

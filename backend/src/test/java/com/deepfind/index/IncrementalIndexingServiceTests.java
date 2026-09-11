@@ -15,6 +15,7 @@ import com.deepfind.filesystem.watch.FileChangeEvent;
 import com.deepfind.filesystem.watch.FileChangeKind;
 import com.deepfind.filesystem.watch.FileWatchFailure;
 import com.deepfind.filesystem.watch.FileWatchFailureReason;
+import com.deepfind.testing.LogCapture;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -34,7 +35,8 @@ class IncrementalIndexingServiceTests {
         Path root = Files.createDirectories(temporaryDirectory.resolve("root"));
         Path file = Files.writeString(root.resolve("notes.txt"), "original term cedar");
 
-        try (Fixture fixture = fixture();
+        try (LogCapture commitLogs = LogCapture.forClass(LuceneMetadataIndex.class);
+                Fixture fixture = fixture();
                 IncrementalIndexingSession session = fixture.service.openSession(root, ExclusionPolicy.none())) {
             session.onChange(new FileChangeEvent(file, FileChangeKind.CREATED));
             assertThat(session.awaitIdle(IDLE_TIMEOUT)).isTrue();
@@ -51,6 +53,7 @@ class IncrementalIndexingServiceTests {
             assertThat(session.awaitIdle(IDLE_TIMEOUT)).isTrue();
             assertThat(fixture.index.search("notes.txt", 10)).isEmpty();
             assertThat(session.reconciliationRequired()).isFalse();
+            assertThat(commitLogs.threadNames()).contains("deepfind-incremental-indexer");
         }
     }
 
@@ -92,17 +95,30 @@ class IncrementalIndexingServiceTests {
     void marksOverflowWatcherFailureAndOutOfRootEventsForReconciliation() throws IOException {
         Path root = Files.createDirectories(temporaryDirectory.resolve("root"));
         Path outside = Files.writeString(temporaryDirectory.resolve("outside.txt"), "outside");
+        String privateFailure = root.resolve("Private customer") + " contained secret-query";
 
-        try (Fixture fixture = fixture();
+        try (LogCapture logs = LogCapture.forClass(IncrementalIndexingService.class);
+                Fixture fixture = fixture();
                 IncrementalIndexingSession session = fixture.service.openSession(root, ExclusionPolicy.none())) {
             session.onChange(new FileChangeEvent(root, FileChangeKind.OVERFLOW));
-            session.onFailure(new FileWatchFailure(
-                    root, FileWatchFailureReason.IO_ERROR, "Directory could not be registered for change tracking."));
+            session.onFailure(new FileWatchFailure(root, FileWatchFailureReason.IO_ERROR, privateFailure));
             session.onChange(new FileChangeEvent(outside, FileChangeKind.CREATED));
 
             assertThat(session.reconciliationRequired()).isTrue();
             assertThat(session.pendingEvents()).isZero();
             assertThat(fixture.index.search("outside.txt", 10)).isEmpty();
+            assertThat(logs.messages())
+                    .contains(
+                            "event=watch_reconciliation_required reason=OVERFLOW",
+                            "event=watch_failure reason=IO_ERROR",
+                            "event=watch_reconciliation_required reason=OUTSIDE_ROOT_EVENT")
+                    .allSatisfy(message -> assertThat(message)
+                            .doesNotContain(
+                                    privateFailure,
+                                    root.toString(),
+                                    outside.toString(),
+                                    "Private customer",
+                                    "secret-query"));
         }
     }
 

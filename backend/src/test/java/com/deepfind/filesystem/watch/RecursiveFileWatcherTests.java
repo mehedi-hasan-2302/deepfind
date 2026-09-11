@@ -34,6 +34,7 @@ class RecursiveFileWatcherTests {
         try (FileWatchSession session = watcher.watch(root, ExclusionPolicy.none(), observer)) {
             Files.writeString(file, "first");
             assertThat(observer.await(FileChangeKind.CREATED, file)).isNotNull();
+            assertThat(observer.lastThreadName).isEqualTo("deepfind-file-watcher");
 
             Files.writeString(file, "second");
             assertThat(observer.await(FileChangeKind.MODIFIED, file)).isNotNull();
@@ -137,9 +138,11 @@ class RecursiveFileWatcherTests {
 
         private final BlockingQueue<FileChangeEvent> changes = new LinkedBlockingQueue<>();
         private final BlockingQueue<FileWatchFailure> failures = new LinkedBlockingQueue<>();
+        private volatile String lastThreadName;
 
         @Override
         public void onChange(FileChangeEvent event) {
+            lastThreadName = Thread.currentThread().getName();
             changes.add(event);
         }
 

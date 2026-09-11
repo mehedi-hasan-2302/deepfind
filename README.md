@@ -6,7 +6,7 @@ DeepFind is a private, offline-first desktop search application for finding file
 
 ## Privacy baseline
 
-DeepFind is designed to process files locally. Core functionality will not require an account, cloud API, telemetry, or document uploads. The local backend binds to `127.0.0.1`, rejects non-local browser/authority metadata, and exposes no broad CORS policy.
+DeepFind is designed to process files locally. Core functionality will not require an account, cloud API, telemetry, or document uploads. The local backend binds to `127.0.0.1`, rejects non-local browser/authority metadata, and exposes no broad CORS policy. Default operational logs use safe event categories and never include full paths, search queries, extracted text, or exception messages.
 
 ## Repository layout
 

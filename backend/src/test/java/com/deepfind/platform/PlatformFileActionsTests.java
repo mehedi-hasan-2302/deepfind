@@ -3,6 +3,7 @@ package com.deepfind.platform;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.deepfind.testing.LogCapture;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -59,13 +60,21 @@ class PlatformFileActionsTests {
     @Test
     void translatesProcessFailuresIntoASafeApplicationError() throws IOException {
         Path file = Files.writeString(root.resolve("locked.txt"), "private");
+        String privateFailure = file + " contained secret-query";
         PlatformFileActions actions = new PlatformFileActions(OperatingSystem.WINDOWS, command -> {
-            throw new IOException("sensitive system detail");
+            throw new IOException(privateFailure);
         });
 
-        assertThatThrownBy(() -> actions.open(file))
-                .isInstanceOf(FileActionUnavailableException.class)
-                .hasMessage("DeepFind could not ask the operating system to complete this action.");
+        try (LogCapture logs = LogCapture.forClass(PlatformFileActions.class)) {
+            assertThatThrownBy(() -> actions.open(file))
+                    .isInstanceOf(FileActionUnavailableException.class)
+                    .hasMessage("DeepFind could not ask the operating system to complete this action.");
+
+            assertThat(logs.messages())
+                    .containsExactly("event=platform_action_failed action=OPEN exception=IOException")
+                    .allSatisfy(message ->
+                            assertThat(message).doesNotContain(privateFailure, file.toString(), "secret-query"));
+        }
     }
 
     private static final class RecordingLauncher implements SystemProcessLauncher {

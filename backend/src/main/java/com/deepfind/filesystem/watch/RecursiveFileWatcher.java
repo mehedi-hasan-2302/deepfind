@@ -67,7 +67,7 @@ public class RecursiveFileWatcher {
             }
             this.worker = Thread.ofPlatform()
                     .daemon(true)
-                    .name("deepfind-file-watcher-" + Integer.toUnsignedString(root.hashCode()))
+                    .name("deepfind-file-watcher")
                     .unstarted(this::run);
             this.worker.start();
         }

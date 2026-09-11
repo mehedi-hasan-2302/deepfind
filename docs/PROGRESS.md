@@ -6,7 +6,7 @@ Phase 7 — Security & Hardening (in progress)
 
 ## Last completed step
 
-STEP 24 — Harden the loopback API browser boundary.
+STEP 25 — Establish privacy-safe structured operational logging.
 
 ## Completed
 
@@ -121,10 +121,17 @@ STEP 24 — Harden the loopback API browser boundary.
 - Defensive API response policy with no-store caching, MIME sniffing prevention, same-origin resource policy, no-referrer policy, and a deny-by-default content security policy.
 - Unused Spring Boot Actuator web endpoints removed from the packaged backend, with unknown resources mapped to a stable safe HTTP 404 response.
 - HTTP integration regressions for hostile authority/origin/referrer/fetch metadata, missing mutation protection, permitted loopback traffic, response headers, absent permissive CORS, and absent Actuator surface.
+- Complete application logging-call audit with stable `event=... key=value` records for lifecycle, scan, extraction, commit, watcher, migration, and platform-action events.
+- Path-, query-, document-, parser-field-, exception-message-, request-body-, and throwable-free logger arguments, backed by targeted privacy regressions using deliberately sensitive test values.
+- Default suppression of detailed Spring startup INFO and direct Flyway/Tika/PDFBox/POI logging, while third-party logging defaults to WARN and application events remain visible at INFO.
+- Safe Flyway migration wrapper that preserves a categorized failure event without exposing a JDBC path through the propagated startup exception.
+- Fixed watcher and incremental-worker thread naming with no selected-root-derived hashes, plus privacy-safe watcher uncertainty/failure categories.
 
 ## Current behavior
 
 The local HTTP boundary rejects non-local browser and authority metadata, requires a CSRF header on state-changing API calls, emits defensive response headers, and packages no Actuator web surface. This does not authenticate other processes running as the current user.
+
+Default runtime logs are console-only structured events containing operational categories, identifiers, and bounded counters. They omit full paths, search queries, document text, parser-provided fields, exception messages, request bodies, and throwable stacks; detailed framework/parser output is suppressed.
 
 Each selected root can now persist a validated list of relative folders to skip. Saving the list triggers changed-only reconciliation, and full scans, reconciliation, and live watching all use the same policy without modifying source files.
 
@@ -175,6 +182,9 @@ The user can index a local folder, safely pause after bounded in-flight work, an
 - `npm run check` in `frontend` after STEP 23 — passed; ESLint, 14 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 - `backend\mvnw.cmd spotless:apply verify --batch-mode --no-transfer-progress` after STEP 24 — passed; 93 tests covered the local API request boundary and absence of unused management routes, executable JAR packaging and Spotless succeeded, and two host-dependent symbolic-link tests were skipped.
 - `npm run check` in `frontend` after STEP 24 — passed; ESLint, 14 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
+- `backend\mvnw.cmd spotless:apply verify --batch-mode --no-transfer-progress` after STEP 25 — passed; 96 tests covered privacy-safe diagnostic fields, migration failure sanitization, fixed watcher thread names, executable JAR packaging, and Spotless, with two host-dependent symbolic-link tests skipped.
+- STEP 25 packaged-runtime smoke test — `GET http://127.0.0.1:18080/api/health` returned HTTP 200; startup output omitted the user/working directory, database path, and detailed framework/migration INFO.
+- `npm run check` in `frontend` after STEP 25 — passed; ESLint, 14 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 
 ## Known failures
 
@@ -182,7 +192,7 @@ No product failures recorded. Maven is not installed globally, so all backend co
 
 ## Next recommended step
 
-Audit application and dependency logging for sensitive paths or content, then add redaction and regression coverage where needed.
+Review parser isolation, timeout enforcement, and permission handling with adversarial fixtures, then close any remaining Phase 7 gaps.
 
 ## Important architectural notes
 
@@ -208,6 +218,7 @@ Audit application and dependency logging for sensitive paths or content, then ad
 - Durable pausing/paused states, safe-stop commit behavior, watcher restoration, and reconciliation-based resume are defined by ADR 0023.
 - Per-root relative exclusion persistence, validation, shared scan/watch policy, and reconciliation behavior are defined by ADR 0024.
 - Loopback authority checks, browser-origin defenses, the mutation header, defensive response headers, and the deliberately unauthenticated local-process trust boundary are defined by ADR 0025.
+- Privacy-safe structured event fields, dependency-log suppression, migration failure sanitization, and the no-path diagnostics boundary are defined by ADR 0026.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
 - Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
 - The desktop shell remains deferred until its owning phase.

@@ -1,5 +1,8 @@
 package com.deepfind.index;
 
+import static com.deepfind.diagnostics.PrivacySafeDiagnostics.exceptionType;
+import static com.deepfind.diagnostics.PrivacySafeDiagnostics.logExtractionOutcome;
+
 import com.deepfind.config.DeepFindWatcherProperties;
 import com.deepfind.extraction.ContentExtractor;
 import com.deepfind.extraction.ExtractionResult;
@@ -28,10 +31,14 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public final class IncrementalIndexingService {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(IncrementalIndexingService.class);
 
     private final LuceneMetadataIndex index;
     private final MetadataIndexingService fullIndexer;
@@ -71,7 +78,7 @@ public final class IncrementalIndexingService {
             this.queue = new ArrayBlockingQueue<>(properties.queueCapacity());
             this.worker = Thread.ofPlatform()
                     .daemon(true)
-                    .name("deepfind-incremental-indexer-" + Integer.toUnsignedString(root.hashCode()))
+                    .name("deepfind-incremental-indexer")
                     .unstarted(this::run);
             this.worker.start();
         }
@@ -84,10 +91,12 @@ public final class IncrementalIndexingService {
             }
             if (event.kind() == FileChangeKind.OVERFLOW) {
                 reconciliationRequired.set(true);
+                LOGGER.warn("event=watch_reconciliation_required reason=OVERFLOW");
                 return;
             }
             if (!event.path().startsWith(root)) {
                 reconciliationRequired.set(true);
+                LOGGER.warn("event=watch_reconciliation_required reason=OUTSIDE_ROOT_EVENT");
                 return;
             }
             if (exclusions.excludes(root, event.path())) {
@@ -104,6 +113,7 @@ public final class IncrementalIndexingService {
                 } catch (InterruptedException exception) {
                     eventFinished();
                     reconciliationRequired.set(true);
+                    LOGGER.warn("event=watch_reconciliation_required reason=DELIVERY_INTERRUPTED");
                     Thread.currentThread().interrupt();
                 }
             }
@@ -114,6 +124,7 @@ public final class IncrementalIndexingService {
             Objects.requireNonNull(failure, "failure must not be null");
             if (accepting.get()) {
                 reconciliationRequired.set(true);
+                LOGGER.warn("event=watch_failure reason={}", failure.reason());
             }
         }
 
@@ -141,12 +152,14 @@ public final class IncrementalIndexingService {
                         applyBatch(batch);
                     } catch (RuntimeException exception) {
                         reconciliationRequired.set(true);
+                        LOGGER.error("event=incremental_batch_failed exception={}", exceptionType(exception));
                     } finally {
                         batch.forEach(ignored -> eventFinished());
                     }
                 } catch (InterruptedException exception) {
                     if (accepting.get()) {
                         reconciliationRequired.set(true);
+                        LOGGER.warn("event=watch_reconciliation_required reason=WORKER_INTERRUPTED");
                     }
                     Thread.currentThread().interrupt();
                     return;
@@ -195,6 +208,9 @@ public final class IncrementalIndexingService {
                 return true;
             } catch (IOException | SecurityException exception) {
                 reconciliationRequired.set(true);
+                LOGGER.warn(
+                        "event=watch_reconciliation_required reason=METADATA_UNREADABLE exception={}",
+                        exceptionType(exception));
                 return false;
             }
 
@@ -206,6 +222,7 @@ public final class IncrementalIndexingService {
             index.upsert(metadata);
             if (metadata.kind() == FileSystemEntryKind.FILE) {
                 ExtractionResult extraction = contentExtractor.extract(metadata.absolutePath());
+                logExtractionOutcome(LOGGER, extraction);
                 index.upsertContent(metadata, extraction);
             }
             return true;
@@ -257,6 +274,7 @@ public final class IncrementalIndexingService {
             }
             if (worker.isAlive()) {
                 reconciliationRequired.set(true);
+                LOGGER.warn("event=watch_reconciliation_required reason=SHUTDOWN_TIMEOUT");
                 worker.interrupt();
             }
         }
