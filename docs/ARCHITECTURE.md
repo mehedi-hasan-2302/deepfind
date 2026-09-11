@@ -73,7 +73,7 @@ The current timeout uses interruption of an in-process parser worker. It bounds 
 
 ## Security boundary
 
-The backend binds to `127.0.0.1`, never `0.0.0.0`, by default. The initial health API exposes no file data. Future filesystem actions must validate input and avoid arbitrary content-read endpoints.
+The backend binds to `127.0.0.1`, never `0.0.0.0`. `LocalApiRequestFilter` rejects non-loopback Host/Origin/Referer metadata and explicit cross-site fetches. Every unsafe HTTP method also requires the fixed `X-DeepFind-Client: browser` header, which prevents ordinary cross-site form submission and forces browser fetches through preflight when cross-origin. The value is intentionally documented and is not authentication against same-device processes. API responses disable storage/sniffing and restrict cross-origin resource use. No CORS allowlist is installed, and the unused Actuator dependency and routes are absent. See ADR 0025.
 
 ## Runtime configuration and API
 
@@ -83,7 +83,7 @@ Selecting a valid indexing root transactionally upserts its normalized record an
 
 On startup, any abandoned `RUNNING` row becomes `INTERRUPTED` rather than completed or deleted. The latest interruption is exposed as the current status with a restart-to-reconcile message, while committed Lucene results remain searchable. A bounded `GET /api/index/history` endpoint exposes recent history through API DTOs. The existing frontend restores the root and allows a new full scan to reconcile it; true mid-tree continuation is not claimed. See ADRs 0012 and 0013.
 
-One daemon worker accepts at most one indexing job at a time, while search uses Lucene's independently refreshed readers. The local API exposes indexing start/status and filename, path, and content search. Search offsets are bounded at 10,000 and page sizes at 1,000; the current interface uses batches of 50. Requests are validated and failures use stable error codes without Java stack traces.
+One daemon worker accepts at most one indexing job at a time, while search uses Lucene's independently refreshed readers. The local API exposes indexing start/status and filename, path, and content search. Search offsets are bounded at 10,000 and page sizes at 1,000; the current interface uses batches of 50. Requests are validated and failures use stable error codes without Java stack traces. Unknown resources return a stable 404 rather than being misclassified as internal failures.
 
 ## Index model
 

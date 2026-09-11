@@ -14,6 +14,8 @@
 
 ## Indexing and search issues
 
+- Custom scripts that call a state-changing local endpoint must include `X-DeepFind-Client: browser`; missing headers receive `403 LOCAL_API_REQUEST_REJECTED`. The header is a browser CSRF barrier, not a password. Requests carrying non-local Host, Origin, Referer, or cross-site fetch metadata are also rejected. Use the exact loopback address and do not enable a broad CORS proxy.
+
 - If startup reports a Lucene schema mismatch after upgrading from an earlier schema, stop DeepFind and remove only the local `<data-directory>\index` directory, then index the selected folder again. Automated rebuild controls are not implemented yet; never remove the source folder.
 - Unsupported, oversized, unreadable, disguised, or malformed documents remain filename/path searchable when their metadata can be read, but their contents are not searchable.
 - Content extraction defaults to 20 MiB, 500,000 characters, and 15 seconds per file. Review `deepfind.extraction.*` settings if a legitimate local document is skipped.

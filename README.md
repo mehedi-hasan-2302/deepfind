@@ -6,7 +6,7 @@ DeepFind is a private, offline-first desktop search application for finding file
 
 ## Privacy baseline
 
-DeepFind is designed to process files locally. Core functionality will not require an account, cloud API, telemetry, or document uploads. The local backend binds to `127.0.0.1` by default.
+DeepFind is designed to process files locally. Core functionality will not require an account, cloud API, telemetry, or document uploads. The local backend binds to `127.0.0.1`, rejects non-local browser/authority metadata, and exposes no broad CORS policy.
 
 ## Repository layout
 
@@ -42,6 +42,8 @@ npm run dev
 ```
 
 The backend listens only on `http://127.0.0.1:8080`. The frontend development server listens on `http://127.0.0.1:5173` and proxies relative `/api` requests to that loopback backend.
+
+All state-changing `/api` requests require `X-DeepFind-Client: browser`. This is a CSRF barrier used automatically by the frontend, not authentication or a secret against other software running on the same computer. Read requests accept no cross-origin access, API responses disable caching and sniffing, and unused Spring Actuator HTTP endpoints are not packaged.
 
 ## Verify
 

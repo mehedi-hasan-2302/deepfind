@@ -92,6 +92,8 @@ interface ApiErrorBody {
   message?: string
 }
 
+const LOCAL_CLIENT_HEADER = { 'X-DeepFind-Client': 'browser' }
+
 export class DeepFindApiError extends Error {
   readonly code: string
 
@@ -109,21 +111,21 @@ export async function getIndexStatus(signal?: AbortSignal): Promise<IndexStatus>
 export async function startIndex(root: string): Promise<IndexStatus> {
   return requestJson<IndexStatus>('/api/index/start', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...LOCAL_CLIENT_HEADER },
     body: JSON.stringify({ root }),
   })
 }
 
 export async function refreshIndex(): Promise<IndexStatus> {
-  return requestJson<IndexStatus>('/api/index/refresh', { method: 'POST' })
+  return requestJson<IndexStatus>('/api/index/refresh', { method: 'POST', headers: LOCAL_CLIENT_HEADER })
 }
 
 export async function pauseIndex(): Promise<IndexStatus> {
-  return requestJson<IndexStatus>('/api/index/pause', { method: 'POST' })
+  return requestJson<IndexStatus>('/api/index/pause', { method: 'POST', headers: LOCAL_CLIENT_HEADER })
 }
 
 export async function resumeIndex(): Promise<IndexStatus> {
-  return requestJson<IndexStatus>('/api/index/resume', { method: 'POST' })
+  return requestJson<IndexStatus>('/api/index/resume', { method: 'POST', headers: LOCAL_CLIENT_HEADER })
 }
 
 export async function getIndexWatchStatus(signal?: AbortSignal): Promise<IndexWatchStatus> {
@@ -137,7 +139,7 @@ export async function getIndexExclusions(signal?: AbortSignal): Promise<IndexExc
 export async function updateIndexExclusions(paths: string[]): Promise<UpdateIndexExclusionsResponse> {
   return requestJson<UpdateIndexExclusionsResponse>('/api/index/exclusions', {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...LOCAL_CLIENT_HEADER },
     body: JSON.stringify({ paths }),
   })
 }
@@ -167,7 +169,7 @@ export async function revealFile(path: string): Promise<FileActionResponse> {
 function requestFileAction(endpoint: string, path: string): Promise<FileActionResponse> {
   return requestJson<FileActionResponse>(endpoint, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...LOCAL_CLIENT_HEADER },
     body: JSON.stringify({ path }),
   })
 }

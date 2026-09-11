@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -79,6 +80,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(InvalidRootExclusionException.class)
     ResponseEntity<ApiError> invalidRootExclusion(InvalidRootExclusionException exception) {
         return error(HttpStatus.BAD_REQUEST, "INDEX_EXCLUSION_INVALID", exception.getMessage(), Map.of());
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    ResponseEntity<ApiError> notFound() {
+        return error(HttpStatus.NOT_FOUND, "NOT_FOUND", "The requested local resource does not exist.", Map.of());
     }
 
     @ExceptionHandler(Exception.class)

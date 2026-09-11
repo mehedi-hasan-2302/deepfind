@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 7 — Security & Hardening (ready to begin)
+Phase 7 — Security & Hardening (in progress)
 
 ## Last completed step
 
-STEP 23 — Add persisted root-relative folder exclusions and complete Phase 6.
+STEP 24 — Harden the loopback API browser boundary.
 
 ## Completed
 
@@ -115,8 +115,16 @@ STEP 23 — Add persisted root-relative folder exclusions and complete Phase 6.
 - Loopback read/replace exclusion endpoints, stable validation errors, and an accessible one-path-per-line indexing-panel editor with explicit privacy guidance.
 - Unit, HTTP integration, and React regressions for normalization, deduplication, persistence, traversal rejection, result pruning, and save/reconciliation behavior.
 - Phase 6 exit criteria met: indexing progress, counters, current path, pause/resume recovery, concurrent search, live-update health, refresh, and exclusions are understandable from the interface.
+- Audited backend and development-server binding, CORS behavior, browser request metadata, response headers, generic route handling, and unused management endpoints.
+- Highest-precedence API filtering that rejects non-loopback host authorities, non-local origins/referrers, and explicit cross-site fetches before controller dispatch.
+- State-changing API requests require the frontend-set `X-DeepFind-Client` CSRF barrier; it is intentionally documented as neither a secret nor authentication for other local processes.
+- Defensive API response policy with no-store caching, MIME sniffing prevention, same-origin resource policy, no-referrer policy, and a deny-by-default content security policy.
+- Unused Spring Boot Actuator web endpoints removed from the packaged backend, with unknown resources mapped to a stable safe HTTP 404 response.
+- HTTP integration regressions for hostile authority/origin/referrer/fetch metadata, missing mutation protection, permitted loopback traffic, response headers, absent permissive CORS, and absent Actuator surface.
 
 ## Current behavior
+
+The local HTTP boundary rejects non-local browser and authority metadata, requires a CSRF header on state-changing API calls, emits defensive response headers, and packages no Actuator web surface. This does not authenticate other processes running as the current user.
 
 Each selected root can now persist a validated list of relative folders to skip. Saving the list triggers changed-only reconciliation, and full scans, reconciliation, and live watching all use the same policy without modifying source files.
 
@@ -165,6 +173,8 @@ The user can index a local folder, safely pause after bounded in-flight work, an
 - `npm run check` in `frontend` after STEP 22 — passed; ESLint, 13 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 - `backend\mvnw.cmd spotless:apply verify --batch-mode --no-transfer-progress` after STEP 23 — passed; 92 tests covered persisted exclusions and HTTP reconciliation, executable JAR packaging and Spotless succeeded, and two host-dependent symbolic-link tests were skipped.
 - `npm run check` in `frontend` after STEP 23 — passed; ESLint, 14 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
+- `backend\mvnw.cmd spotless:apply verify --batch-mode --no-transfer-progress` after STEP 24 — passed; 93 tests covered the local API request boundary and absence of unused management routes, executable JAR packaging and Spotless succeeded, and two host-dependent symbolic-link tests were skipped.
+- `npm run check` in `frontend` after STEP 24 — passed; ESLint, 14 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 
 ## Known failures
 
@@ -172,7 +182,7 @@ No product failures recorded. Maven is not installed globally, so all backend co
 
 ## Next recommended step
 
-Begin Phase 7 with a local API and network-exposure audit, then close any hardening gaps with executable regressions.
+Audit application and dependency logging for sensitive paths or content, then add redaction and regression coverage where needed.
 
 ## Important architectural notes
 
@@ -197,6 +207,7 @@ Begin Phase 7 with a local API and network-exposure audit, then close any harden
 - Bounded offset windows, one-hit continuation detection, exact/lower-bound totals, frontend batching, and live-index consistency tradeoffs are defined by ADR 0022.
 - Durable pausing/paused states, safe-stop commit behavior, watcher restoration, and reconciliation-based resume are defined by ADR 0023.
 - Per-root relative exclusion persistence, validation, shared scan/watch policy, and reconciliation behavior are defined by ADR 0024.
+- Loopback authority checks, browser-origin defenses, the mutation header, defensive response headers, and the deliberately unauthenticated local-process trust boundary are defined by ADR 0025.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
 - Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
 - The desktop shell remains deferred until its owning phase.

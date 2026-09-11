@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,6 +25,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -48,7 +50,7 @@ class DeepFindApiIntegrationTests {
         Path contentFile = Files.writeString(project.resolve("private-notes.txt"), "the internal codename is starling");
         String requestJson = "{\"root\":\"" + jsonEscape(root.toString()) + "\"}";
 
-        mockMvc.perform(post("/api/index/start")
+        mockMvc.perform(localPost("/api/index/start")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isAccepted())
@@ -77,7 +79,7 @@ class DeepFindApiIntegrationTests {
                         .value(root.toAbsolutePath().normalize().toString()))
                 .andExpect(jsonPath("$[0].entriesIndexed").value(6));
 
-        mockMvc.perform(post("/api/index/refresh"))
+        mockMvc.perform(localPost("/api/index/refresh"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.state").value("RUNNING"))
                 .andExpect(jsonPath("$.root")
@@ -156,7 +158,7 @@ class DeepFindApiIntegrationTests {
     void returnsStableErrorsForInvalidRootsAndQueries() throws Exception {
         Path missing = root.resolve("missing");
 
-        mockMvc.perform(post("/api/index/start")
+        mockMvc.perform(localPost("/api/index/start")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"root\":\"" + jsonEscape(missing.toString()) + "\"}"))
                 .andExpect(status().isBadRequest())
@@ -180,11 +182,11 @@ class DeepFindApiIntegrationTests {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("INVALID_REQUEST"));
 
-        mockMvc.perform(post("/api/index/pause"))
+        mockMvc.perform(localPost("/api/index/pause"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INDEX_JOB_STATE_CONFLICT"));
 
-        mockMvc.perform(post("/api/index/resume"))
+        mockMvc.perform(localPost("/api/index/resume"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INDEX_JOB_STATE_CONFLICT"));
 
@@ -202,7 +204,7 @@ class DeepFindApiIntegrationTests {
         Files.writeString(privateFolder.resolve("secret.txt"), "classifiedtoken");
         Files.writeString(root.resolve("visible.txt"), "publictoken");
 
-        mockMvc.perform(post("/api/index/start")
+        mockMvc.perform(localPost("/api/index/start")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"root\":\"" + jsonEscape(root.toString()) + "\"}"))
                 .andExpect(status().isAccepted());
@@ -212,7 +214,7 @@ class DeepFindApiIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalHits").value(1));
 
-        mockMvc.perform(put("/api/index/exclusions")
+        mockMvc.perform(localPut("/api/index/exclusions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"paths\":[\"Private\"]}"))
                 .andExpect(status().isAccepted())
@@ -232,7 +234,7 @@ class DeepFindApiIntegrationTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalHits").value(1));
 
-        mockMvc.perform(put("/api/index/exclusions")
+        mockMvc.perform(localPut("/api/index/exclusions")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"paths\":[\"../outside\"]}"))
                 .andExpect(status().isBadRequest())
@@ -244,12 +246,12 @@ class DeepFindApiIntegrationTests {
         Path file = Files.writeString(root.resolve("final report.txt"), "metadata only");
         String requestJson = "{\"path\":\"" + jsonEscape(file.toString()) + "\"}";
 
-        mockMvc.perform(post("/api/files/open")
+        mockMvc.perform(localPost("/api/files/open")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.action").value("OPENED"));
-        mockMvc.perform(post("/api/files/reveal")
+        mockMvc.perform(localPost("/api/files/reveal")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isAccepted())
@@ -267,13 +269,45 @@ class DeepFindApiIntegrationTests {
                 .when(fileActions)
                 .open(missing);
 
-        mockMvc.perform(post("/api/files/open")
+        mockMvc.perform(localPost("/api/files/open")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(requestJson))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("FILE_ACTION_INVALID"))
                 .andExpect(jsonPath("$.message").value("This file or folder no longer exists."))
                 .andExpect(jsonPath("$.details").isMap());
+    }
+
+    @Test
+    void rejectsCrossSiteAndUnguardedLocalApiRequests() throws Exception {
+        mockMvc.perform(get("/api/health").header("Host", "attacker.example"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("LOCAL_API_REQUEST_REJECTED"));
+
+        mockMvc.perform(get("/api/health").header("Origin", "https://attacker.example"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("LOCAL_API_REQUEST_REJECTED"));
+
+        mockMvc.perform(get("/api/health").header("Referer", "https://attacker.example/page"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("LOCAL_API_REQUEST_REJECTED"));
+
+        mockMvc.perform(post("/api/index/pause"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("LOCAL_API_REQUEST_REJECTED"));
+
+        mockMvc.perform(localPost("/api/index/pause").header("Sec-Fetch-Site", "cross-site"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("LOCAL_API_REQUEST_REJECTED"));
+
+        mockMvc.perform(get("/api/health").header("Origin", "http://127.0.0.1:5173"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(header().string("X-Content-Type-Options", "nosniff"))
+                .andExpect(header().string("Cross-Origin-Resource-Policy", "same-origin"))
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
+
+        mockMvc.perform(get("/actuator/health")).andExpect(status().isNotFound());
     }
 
     private void awaitCompleted(Duration timeout) throws InterruptedException {
@@ -289,5 +323,13 @@ class DeepFindApiIntegrationTests {
 
     private static String jsonEscape(String value) {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private static MockHttpServletRequestBuilder localPost(String path) {
+        return post(path).header(LocalApiRequestFilter.CLIENT_HEADER, LocalApiRequestFilter.CLIENT_HEADER_VALUE);
+    }
+
+    private static MockHttpServletRequestBuilder localPut(String path) {
+        return put(path).header(LocalApiRequestFilter.CLIENT_HEADER, LocalApiRequestFilter.CLIENT_HEADER_VALUE);
     }
 }

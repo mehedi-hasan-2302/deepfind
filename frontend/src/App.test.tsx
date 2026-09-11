@@ -176,8 +176,14 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Resume indexing' }))
     expect(await screen.findByText(/42 entries are ready to search/i, {}, { timeout: 2_000 })).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith('/api/index/pause', { method: 'POST' })
-    expect(fetchMock).toHaveBeenCalledWith('/api/index/resume', { method: 'POST' })
+    expect(fetchMock).toHaveBeenCalledWith('/api/index/pause', {
+      method: 'POST',
+      headers: { 'X-DeepFind-Client': 'browser' },
+    })
+    expect(fetchMock).toHaveBeenCalledWith('/api/index/resume', {
+      method: 'POST',
+      headers: { 'X-DeepFind-Client': 'browser' },
+    })
   })
 
   it('shows live freshness and manually refreshes the selected folder', async () => {
@@ -223,7 +229,10 @@ describe('App', () => {
 
     expect(await screen.findByText(/live updates paused/i)).toBeInTheDocument()
     expect(await screen.findByText(/42 entries are ready to search/i, {}, { timeout: 2_000 })).toBeInTheDocument()
-    expect(fetchMock).toHaveBeenCalledWith('/api/index/refresh', { method: 'POST' })
+    expect(fetchMock).toHaveBeenCalledWith('/api/index/refresh', {
+      method: 'POST',
+      headers: { 'X-DeepFind-Client': 'browser' },
+    })
     expect(statusRequests).toBeGreaterThan(1)
   })
 
