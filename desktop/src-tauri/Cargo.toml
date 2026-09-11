@@ -1,0 +1,23 @@
+[package]
+name = "deepfind-desktop"
+version = "0.1.0"
+description = "DeepFind local-first desktop search"
+edition = "2021"
+rust-version = "1.77.2"
+
+[[bin]]
+name = "DeepFind"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-single-instance = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading"] }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]

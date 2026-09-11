@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DeepFind",
+  "version": "0.1.0",
+  "identifier": "com.deepfind.desktop",
+  "build": {
+    "frontendDist": "../bootstrap"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [],
+    "security": {
+      "capabilities": [],
+      "csp": "default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "shortDescription": "Private, local-first file and document search",
+    "category": "Utility",
+    "resources": {
+      "resources/runtime/": "runtime/",
+      "resources/deepfind-backend.jar": "deepfind-backend.jar"
+    },
+    "windows": {
+      "webviewInstallMode": { "type": "offlineInstaller" },
+      "nsis": { "installMode": "currentUser", "displayLanguageSelector": false }
+    }
+  }
+}
