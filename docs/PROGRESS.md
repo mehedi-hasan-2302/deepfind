@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 7 — Security & Hardening (complete)
+Phase 8 — Desktop Packaging (in progress)
 
 ## Last completed step
 
-STEP 27 — Verify privacy claims and packaged runtime network behavior.
+STEP 28 — Choose the Windows desktop shell and bundled-runtime architecture.
 
 ## Completed
 
@@ -138,6 +138,11 @@ STEP 27 — Verify privacy claims and packaged runtime network behavior.
 - Repeatable Windows packaged-runtime audit that isolates local state, samples process-owned TCP/UDP endpoints, enforces IPv4 loopback-only listening, and cleans its validated temporary directory.
 - Live packaged-JAR evidence covering startup, health, and idle sampling: one `127.0.0.1:18082` listener, no external TCP connection, and no UDP endpoint.
 - Phase 7 exit criteria met: no designed external runtime request, no observed unexpected packaged-runtime activity in the audited paths, and no obvious unsafe local API behavior.
+- Tauri 2 selected over Electron, JavaFX, and a system-browser launcher after reviewing UI reuse, lifecycle ownership, packaged surface, offline installation, and build/runtime prerequisites.
+- Desktop architecture fixed around a minimal Rust supervisor, production React assets served by Spring Boot, an exact ephemeral IPv4 loopback origin, and no generic native capability exposed to frontend JavaScript.
+- Application-specific Java 21 `jlink` runtime selected with a broader-runtime fallback until reflection, service loading, native libraries, parsers, persistence, watching, and platform actions pass installed-app tests.
+- Per-user NSIS `DeepFind-Setup.exe`, installed `DeepFind.exe`, bundled WebView2 offline installer, preserved `${user.home}/.deepfind` state, and no MVP auto-updater selected as distribution policy.
+- Staged packaging implementation and clean-Windows acceptance evidence documented in `docs/PACKAGING.md`, with lifecycle/security tradeoffs captured in ADR 0029.
 
 ## Current behavior
 
@@ -148,6 +153,8 @@ Default runtime logs are console-only structured events containing operational c
 Content extraction now rejects static symbolic links and non-regular inputs with no-follow checks at submission and worker entry, purges cancelled queue entries after deadlines or caller interruption, preserves caller interruption, and reports shutdown explicitly. The parser remains in-process and cooperative rather than a hard security sandbox.
 
 The production application has no designed external request. Backend source and dependencies contain no configured client/exporter/updater, frontend runtime calls are relative and use no remote assets, JMX/WebSocket/Actuator surfaces are absent or disabled, XML external entities cannot trigger HTTP, and the packaged runtime audit observes only its loopback listener. Build dependency downloads remain separate build-time network behavior.
+
+Desktop packaging now has a documented architecture but no generated `.exe` yet. Tauri will own the window and supervise a bundled Java backend; the implementation deliberately begins with a shell spike before runtime minimization or installer generation.
 
 Each selected root can now persist a validated list of relative folders to skip. Saving the list triggers changed-only reconciliation, and full scans, reconciliation, and live watching all use the same policy without modifying source files.
 
@@ -209,14 +216,15 @@ The user can index a local folder, safely pause after bounded in-flight work, an
 - `npm run check` in `frontend` after STEP 27 — passed; ESLint, 14 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
 - STEP 27 resolved dependency/package audit — passed; no analytics, telemetry exporter, crash uploader, cloud client, updater, Actuator, or embedded Tomcat WebSocket runtime was found. Frontend production dependencies were React and ReactDOM only.
 - `scripts\audit-runtime-network.ps1` after STEP 27 — passed against the rebuilt packaged JAR; health returned HTTP 200, the only observed endpoint was the `127.0.0.1:18082` TCP listener, and no UDP endpoint was observed.
+- STEP 28 local packaging-prerequisite audit — Java 21, `jlink`, `jpackage`, Node.js 22, and npm 11 are available; Rust/Cargo and WiX are not installed. No new runtime dependency was added during the decision step.
 
 ## Known failures
 
-No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. In restricted Windows environments Maven clean/Spotless may need permission to replace the generated `backend\target` tree. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Native watch providers may duplicate, coalesce, reorder, or overflow events; scheduled reconciliation repairs uncertainty eventually, not as an atomic snapshot. Extraction timeouts use cooperative thread interruption, not hard process isolation; cancelled queue entries are purged, but a parser that ignores interruption can retain one bounded worker until it exits. No-follow checks reject static symbolic links, but a same-user process can still replace a path after the worker's final check. The runtime connection audit is sampled evidence rather than proof of every possible third-party path and must be rerun after dependency, parser, or packaging changes. Build tools still contact configured dependency repositories. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths, failure descriptions, counters, and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced. Interrupted runs restart as full root reconciliation scans rather than unsafe mid-tree continuation.
+No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. In restricted Windows environments Maven clean/Spotless may need permission to replace the generated `backend\target` tree. Rust/Cargo and the Windows installer toolchain are not installed yet, so no desktop executable exists. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Native watch providers may duplicate, coalesce, reorder, or overflow events; scheduled reconciliation repairs uncertainty eventually, not as an atomic snapshot. Extraction timeouts use cooperative thread interruption, not hard process isolation; cancelled queue entries are purged, but a parser that ignores interruption can retain one bounded worker until it exits. No-follow checks reject static symbolic links, but a same-user process can still replace a path after the worker's final check. The runtime connection audit is sampled evidence rather than proof of every possible third-party path and must be rerun after dependency, parser, or packaging changes. Build tools still contact configured dependency repositories. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths, failure descriptions, counters, and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced. Interrupted runs restart as full root reconciliation scans rather than unsafe mid-tree continuation.
 
 ## Next recommended step
 
-Begin Phase 8 by choosing and documenting the Windows desktop shell and bundled-runtime strategy before implementing the installer or `.exe`.
+Install the Rust/Tauri build prerequisites with explicit approval, then bootstrap a minimal Tauri 2 shell that opens only bundled local assets before connecting it to the Java backend.
 
 ## Important architectural notes
 
@@ -245,6 +253,7 @@ Begin Phase 8 by choosing and documenting the Windows desktop shell and bundled-
 - Privacy-safe structured event fields, dependency-log suppression, migration failure sanitization, and the no-path diagnostics boundary are defined by ADR 0026.
 - Double no-follow parser preflight, cancelled-queue purging, cooperative shutdown, normal-user permissions, and residual process-isolation risks are defined by ADR 0027.
 - Source/dependency/runtime network auditing, explicit unused-surface removal, future online-feature controls, and packaging re-verification are defined by ADR 0028.
+- Tauri shell selection, bundled Java runtime, same-origin loopback UI, supervisor lifecycle, per-user offline installer, and packaging acceptance criteria are defined by ADR 0029.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
-- Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
-- The desktop shell remains deferred until its owning phase.
+- Phase 8 uses Tauri 2 and will implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
+- Desktop implementation follows the staged spike, backend artifact, supervision, lifecycle, installer, and clean-machine verification plan in `docs/PACKAGING.md`.

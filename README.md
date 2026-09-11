@@ -69,7 +69,7 @@ The audit starts the JAR with temporary local state, confirms loopback health, r
 
 ## Packaging
 
-Desktop packaging begins in Phase 8. The production goal is one self-contained desktop application that bundles its required runtime.
+Desktop packaging is in progress in Phase 8. Tauri 2 will own the Windows window and lifecycle, while an application-specific Java 21 runtime and Spring Boot backend are bundled as local resources. The production frontend will be served from that backend on an ephemeral IPv4 loopback port, preserving relative same-origin API calls. The target artifacts are an installed `DeepFind.exe` and per-user, offline-capable `DeepFind-Setup.exe`; no automatic updater is planned for the MVP. See the [desktop packaging plan](docs/PACKAGING.md) and [ADR 0029](docs/decisions/0029-use-tauri-with-bundled-java-runtime.md).
 
 ## Local data
 
@@ -100,6 +100,7 @@ Search responses are paged. The API accepts an `offset` from 0 through 10,000 an
 - [Product requirements](docs/PRODUCT.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Search quality evaluation](docs/SEARCH_QUALITY.md)
+- [Desktop packaging plan](docs/PACKAGING.md)
 - [Privacy](docs/PRIVACY.md)
 - [Progress and handoff](docs/PROGRESS.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)

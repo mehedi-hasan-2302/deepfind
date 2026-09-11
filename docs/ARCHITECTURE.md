@@ -9,7 +9,7 @@ Phases 1–7 provide an end-to-end local search slice with durable index, root c
 - `frontend`: React and TypeScript interface served by Vite during development.
 - `backend`: Java 21 Spring Boot modular monolith exposing a local HTTP API.
 - Infrastructure adapters: Lucene for local full-text search, Apache Tika for bounded extraction, SQLite for structured application state, and platform adapters for open/reveal actions.
-- Future desktop shell: responsible for starting the backend, waiting for health, hosting the UI, and shutting down cleanly.
+- Tauri 2 desktop shell: will start the bundled Java backend, wait for ephemeral-loopback health, host the same-origin UI, restrict native capabilities/navigation, and shut the backend down cleanly.
 
 ## Dependency direction
 
@@ -94,6 +94,12 @@ Selecting a valid indexing root transactionally upserts its normalized record an
 On startup, any abandoned `RUNNING` row becomes `INTERRUPTED` rather than completed or deleted. The latest interruption is exposed as the current status with a restart-to-reconcile message, while committed Lucene results remain searchable. A bounded `GET /api/index/history` endpoint exposes recent history through API DTOs. The existing frontend restores the root and allows a new full scan to reconcile it; true mid-tree continuation is not claimed. See ADRs 0012 and 0013.
 
 One daemon worker accepts at most one indexing job at a time, while search uses Lucene's independently refreshed readers. The local API exposes indexing start/status and filename, path, and content search. Search offsets are bounded at 10,000 and page sizes at 1,000; the current interface uses batches of 50. Requests are validated and failures use stable error codes without Java stack traces. Unknown resources return a stable 404 rather than being misclassified as internal failures.
+
+## Desktop packaging architecture
+
+Tauri 2 is the selected lifecycle owner for Phase 8. Its Rust core will bundle and invoke an application-specific Java 21 runtime plus the production Spring Boot JAR through exact resource paths, without giving frontend JavaScript a generic shell or filesystem capability. Spring Boot will serve the compiled React application and API from one ephemeral `127.0.0.1` origin; Tauri will wait for health before showing that external WebView URL and will deny navigation outside the chosen origin.
+
+The supervisor will retain the Java child handle, communicate readiness and graceful shutdown through a private inherited channel, bound shutdown before forced child termination, and replace unexpected backend exit with a local recovery view. The per-user NSIS setup executable will include Tauri's offline WebView2 installer, so first installation does not depend on a network bootstrapper. Local index/database state remains under `${user.home}/.deepfind`; uninstall must not silently remove it. See ADR 0029 and `docs/PACKAGING.md`.
 
 ## Index model
 
