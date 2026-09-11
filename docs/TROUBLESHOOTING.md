@@ -5,6 +5,12 @@
 - Runtime diagnostics are console-only `event=... key=value` records. They intentionally omit full paths, queries, extracted text, parser details, exception messages, and stack traces. Use the event name, job identifier, fixed reason/status, and counters when reporting a problem.
 - Do not enable verbose Spring, Flyway, Tika, PDFBox, POI, JDBC, or HTTP-body logging when working with private files. A future diagnostics export must be explicit and clearly disclose any additional local data before collecting it.
 
+## Runtime network audit
+
+- After building the backend JAR with `backend\mvnw.cmd verify`, run `scripts\audit-runtime-network.ps1` from the repository root on Windows. It should report one listener on `127.0.0.1` and no UDP endpoint.
+- The script needs an unused audit port (default `18082`) and permission to inspect connections owned by the Java process. Use `-Port <number>` if that port is occupied. It creates isolated data under the operating-system temporary directory and removes only that validated directory after stopping the process.
+- A failure means the connection boundary or startup could not be verified; do not reinterpret it as a pass. Review package/source changes and rerun the audit before making an offline claim.
+
 ## Backend does not start
 
 - Confirm Java 21 with `java -version`.

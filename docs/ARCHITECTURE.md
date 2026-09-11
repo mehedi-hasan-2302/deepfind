@@ -2,7 +2,7 @@
 
 ## Status
 
-Phases 1–6 provide an end-to-end local search slice with durable index, root configuration, scan history, interrupted-run detection, automatic selected-root watching, bounded incremental Lucene updates, scheduled reconciliation, manual refresh, visible freshness health, pause/resume, persisted per-root exclusions, phrase search, explicit filters, bounded fuzzy fallback, highlighting, and pagination. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, a loopback API, a React interface, guarded platform file actions, event application, watcher lifecycle coordination, automatic repair, understandable indexing controls, and a deterministic search-quality evaluation corpus are implemented. Hardening, desktop packaging, performance validation, and beta readiness remain.
+Phases 1–7 provide an end-to-end local search slice with durable index, root configuration, scan history, interrupted-run detection, automatic selected-root watching, bounded incremental Lucene updates, scheduled reconciliation, manual refresh, visible freshness health, pause/resume, persisted per-root exclusions, phrase search, explicit filters, bounded fuzzy fallback, highlighting, pagination, and a reviewed local security/privacy boundary. Filesystem discovery, persistent Lucene filename/path/content indexing, bounded document extraction, a loopback API, a React interface, guarded platform file actions, event application, watcher lifecycle coordination, automatic repair, understandable indexing controls, privacy-safe diagnostics, adversarial parser safeguards, and a repeatable runtime-network audit are implemented. Desktop packaging, performance validation, and beta readiness remain.
 
 ## Components
 
@@ -78,6 +78,12 @@ The backend binds to `127.0.0.1`, never `0.0.0.0`. `LocalApiRequestFilter` rejec
 ## Diagnostics and logging
 
 Application-owned console logs use stable `event=... key=value` records containing only job identifiers, bounded counters, fixed operation names, enums, and exception class names. Paths, queries, extracted content, parser-provided fields, exception messages, request bodies, and throwable stacks are not logger arguments. Spring detailed startup INFO is disabled, third-party output defaults to WARN, and direct Flyway/Tika/PDFBox/POI logging is disabled. Database migration failures are translated into a path-free event and safe startup exception. Watcher and incremental-worker threads have fixed names rather than root-derived hashes. SQLite scan history remains intentionally path-bearing local application state, not a log. See ADR 0026.
+
+## Runtime network behavior
+
+Production backend source contains no outbound HTTP/cloud client, telemetry exporter, crash uploader, analytics service, or updater. The frontend calls only relative `/api` paths and packages no remote assets; its production runtime dependencies are React and ReactDOM. The embedded server listens on IPv4 loopback, JMX is explicitly disabled, Actuator is absent, and the unused Tomcat WebSocket runtime is excluded. Micrometer observation types arrive through Spring Web but no meter registry, exporter, or observation endpoint is packaged.
+
+`scripts/audit-runtime-network.ps1` launches the packaged backend with isolated temporary state and inspects endpoints owned by that process during startup, health access, and idle sampling. The Phase 7 trace observed only `127.0.0.1:18082` listening and no UDP endpoint. This sampled evidence complements source/dependency review; it does not replace re-auditing after dependency, parser, or desktop-shell changes. Build tools can contact dependency repositories, but the packaged application has no designed external runtime request. See ADR 0028.
 
 ## Runtime configuration and API
 

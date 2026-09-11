@@ -3,9 +3,12 @@ package com.deepfind.extraction;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -74,7 +77,7 @@ class TikaDocumentParserTests {
     }
 
     @Test
-    void doesNotResolveExternalXmlEntities() throws Exception {
+    void doesNotResolveLocalExternalXmlEntities() throws Exception {
         String privateToken = "external-entity-private-token";
         Path privateFile = Files.writeString(root.resolve("private.txt"), privateToken);
         Path xml = Files.writeString(
@@ -86,6 +89,38 @@ class TikaDocumentParserTests {
             assertThat(document.content()).doesNotContain(privateToken);
         } catch (DocumentParsingException expected) {
             assertThat(expected).isNotNull();
+        }
+    }
+
+    @Test
+    void doesNotFetchHttpExternalXmlEntities() throws Exception {
+        String remoteToken = "http-external-entity-private-token";
+        AtomicInteger requests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/entity", exchange -> {
+            requests.incrementAndGet();
+            byte[] response = remoteToken.getBytes();
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        Path xml = Files.writeString(
+                root.resolve("remote-entity.xml"),
+                "<!DOCTYPE root [<!ENTITY external SYSTEM \"http://127.0.0.1:"
+                        + server.getAddress().getPort()
+                        + "/entity\">]><root>&external;</root>");
+
+        try {
+            try {
+                ParsedDocument document = parser.parse(xml, 10_000);
+                assertThat(document.content()).doesNotContain(remoteToken);
+            } catch (DocumentParsingException expected) {
+                assertThat(expected).isNotNull();
+            }
+            assertThat(requests).hasValue(0);
+        } finally {
+            server.stop(0);
         }
     }
 

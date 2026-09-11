@@ -2,11 +2,11 @@
 
 > You remember what was in the file. DeepFind finds where you put it.
 
-DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–6 are complete.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor or pause indexing, exclude selected subfolders, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface. The selected root is watched automatically, so ordinary create, edit, rename, and delete activity updates Lucene after indexing. Periodic metadata-aware reconciliation repairs missed events and proven deletions, while the interface exposes live-update health and a manual changed-only refresh.
+DeepFind is a private, offline-first desktop search application for finding files by name, path, and the text inside supported documents. **Phases 1–7 are complete.** Users can select a local folder by path, retain that selection and scan history across restarts, monitor or pause indexing, exclude selected subfolders, recover clearly from interrupted scans, search filenames, paths, text, Markdown, common source files, PDF, and DOCX, see highlighted match context, then open, reveal, or copy result paths from the web interface. The selected root is watched automatically, so ordinary create, edit, rename, and delete activity updates Lucene after indexing. Periodic metadata-aware reconciliation repairs missed events and proven deletions, while the interface exposes live-update health and a manual changed-only refresh.
 
 ## Privacy baseline
 
-DeepFind is designed to process files locally. Core functionality will not require an account, cloud API, telemetry, or document uploads. The local backend binds to `127.0.0.1`, rejects non-local browser/authority metadata, and exposes no broad CORS policy. Default operational logs use safe event categories and never include full paths, search queries, extracted text, or exception messages.
+DeepFind processes files locally. Core functionality requires no account, cloud API, telemetry, analytics, remote asset, or document upload. Production source and resolved-runtime audits found no outbound client/exporter/updater, and a packaged-JAR connection trace observed only the expected `127.0.0.1` listener. The local backend rejects non-local browser/authority metadata and exposes no broad CORS policy. Default operational logs use safe event categories and never include full paths, search queries, extracted text, or exception messages. Build tools may separately contact their configured package repositories while installing dependencies.
 
 ## Repository layout
 
@@ -58,9 +58,18 @@ npm run check
 
 `npm run check` runs frontend linting, tests, and the production build.
 
+On Windows, verify the packaged backend's connection boundary after `mvnw.cmd verify`:
+
+```powershell
+cd ..
+.\scripts\audit-runtime-network.ps1
+```
+
+The audit starts the JAR with temporary local state, confirms loopback health, rejects observed non-loopback TCP or any UDP activity, stops the process, and removes its temporary state.
+
 ## Packaging
 
-Desktop packaging is intentionally deferred to Phase 8. The production goal is one self-contained desktop application that bundles its required runtime.
+Desktop packaging begins in Phase 8. The production goal is one self-contained desktop application that bundles its required runtime.
 
 ## Local data
 

@@ -29,3 +29,4 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0025 — Harden the loopback API browser boundary](0025-harden-loopback-api-browser-boundary.md)
 - [0026 — Use privacy-safe structured operational logs](0026-use-privacy-safe-structured-logs.md)
 - [0027 — Harden the cooperative parser boundary](0027-harden-cooperative-parser-boundary.md)
+- [0028 — Verify deny-by-design runtime networking](0028-verify-deny-by-design-runtime-networking.md)

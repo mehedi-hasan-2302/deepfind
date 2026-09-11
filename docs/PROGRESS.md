@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Phase 7 — Security & Hardening (in progress)
+Phase 7 — Security & Hardening (complete)
 
 ## Last completed step
 
-STEP 26 — Harden the cooperative document-parser boundary.
+STEP 27 — Verify privacy claims and packaged runtime network behavior.
 
 ## Completed
 
@@ -132,6 +132,12 @@ STEP 26 — Harden the cooperative document-parser boundary.
 - Adversarial regressions for non-regular input, conditional symbolic links, malformed PDFs, interruption-ignoring parsers, caller interruption, closed extractors, and XML external entities.
 - Explicit normal-user permission policy with no whole-application elevation, plus a documented residual in-process parser and same-user path-replacement boundary.
 - Tika release and security-model review retaining supported 3.3.2 modules while deferring Tika 4 forked processing to a dedicated runtime/packaging decision.
+- Production source and resolved dependency audit finding no backend HTTP/cloud client, telemetry exporter, crash uploader, analytics service, updater, remote frontend asset, or non-relative frontend API request.
+- Explicit JMX disablement and removal of the unused embedded Tomcat WebSocket runtime, while retaining the already-tested absence of Actuator endpoints and broad CORS.
+- HTTP external-entity regression proving hostile XML cannot trigger even a loopback request, complementing the local-file entity regression.
+- Repeatable Windows packaged-runtime audit that isolates local state, samples process-owned TCP/UDP endpoints, enforces IPv4 loopback-only listening, and cleans its validated temporary directory.
+- Live packaged-JAR evidence covering startup, health, and idle sampling: one `127.0.0.1:18082` listener, no external TCP connection, and no UDP endpoint.
+- Phase 7 exit criteria met: no designed external runtime request, no observed unexpected packaged-runtime activity in the audited paths, and no obvious unsafe local API behavior.
 
 ## Current behavior
 
@@ -140,6 +146,8 @@ The local HTTP boundary rejects non-local browser and authority metadata, requir
 Default runtime logs are console-only structured events containing operational categories, identifiers, and bounded counters. They omit full paths, search queries, document text, parser-provided fields, exception messages, request bodies, and throwable stacks; detailed framework/parser output is suppressed.
 
 Content extraction now rejects static symbolic links and non-regular inputs with no-follow checks at submission and worker entry, purges cancelled queue entries after deadlines or caller interruption, preserves caller interruption, and reports shutdown explicitly. The parser remains in-process and cooperative rather than a hard security sandbox.
+
+The production application has no designed external request. Backend source and dependencies contain no configured client/exporter/updater, frontend runtime calls are relative and use no remote assets, JMX/WebSocket/Actuator surfaces are absent or disabled, XML external entities cannot trigger HTTP, and the packaged runtime audit observes only its loopback listener. Build dependency downloads remain separate build-time network behavior.
 
 Each selected root can now persist a validated list of relative folders to skip. Saving the list triggers changed-only reconciliation, and full scans, reconciliation, and live watching all use the same policy without modifying source files.
 
@@ -196,14 +204,19 @@ The user can index a local folder, safely pause after bounded in-flight work, an
 - Focused STEP 26 extraction verification — passed; 17 tests covered input boundaries, queue purging, interruption, shutdown, parser failures, and XML external entities, with one host-dependent symbolic-link test skipped.
 - `backend\mvnw.cmd spotless:apply verify --batch-mode --no-transfer-progress` after STEP 26 — passed; 102 tests covered the hardened parser boundary and all existing behavior, executable JAR packaging and Spotless succeeded, and three host-dependent symbolic-link tests were skipped.
 - `npm run check` in `frontend` after STEP 26 — passed; ESLint, 14 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
+- Focused STEP 27 parser verification — passed; 7 tests included local-file and HTTP external-entity regressions with zero unexpected HTTP requests.
+- `backend\mvnw.cmd spotless:apply verify --batch-mode --no-transfer-progress` after STEP 27 — passed; 103 tests, executable JAR packaging, and Spotless succeeded, with three host-dependent symbolic-link tests skipped.
+- `npm run check` in `frontend` after STEP 27 — passed; ESLint, 14 Vitest interaction tests, TypeScript, and the Vite production build succeeded.
+- STEP 27 resolved dependency/package audit — passed; no analytics, telemetry exporter, crash uploader, cloud client, updater, Actuator, or embedded Tomcat WebSocket runtime was found. Frontend production dependencies were React and ReactDOM only.
+- `scripts\audit-runtime-network.ps1` after STEP 27 — passed against the rebuilt packaged JAR; health returned HTTP 200, the only observed endpoint was the `127.0.0.1:18082` TCP listener, and no UDP endpoint was observed.
 
 ## Known failures
 
-No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. In restricted Windows environments Maven clean/Spotless may need permission to replace the generated `backend\target` tree. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Native watch providers may duplicate, coalesce, reorder, or overflow events; scheduled reconciliation repairs uncertainty eventually, not as an atomic snapshot. Extraction timeouts use cooperative thread interruption, not hard process isolation; cancelled queue entries are purged, but a parser that ignores interruption can retain one bounded worker until it exits. No-follow checks reject static symbolic links, but a same-user process can still replace a path after the worker's final check. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths, failure descriptions, counters, and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced. Interrupted runs restart as full root reconciliation scans rather than unsafe mid-tree continuation.
+No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. In restricted Windows environments Maven clean/Spotless may need permission to replace the generated `backend\target` tree. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Native watch providers may duplicate, coalesce, reorder, or overflow events; scheduled reconciliation repairs uncertainty eventually, not as an atomic snapshot. Extraction timeouts use cooperative thread interruption, not hard process isolation; cancelled queue entries are purged, but a parser that ignores interruption can retain one bounded worker until it exits. No-follow checks reject static symbolic links, but a same-user process can still replace a path after the worker's final check. The runtime connection audit is sampled evidence rather than proof of every possible third-party path and must be rerun after dependency, parser, or packaging changes. Build tools still contact configured dependency repositories. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths, failure descriptions, counters, and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced. Interrupted runs restart as full root reconciliation scans rather than unsafe mid-tree continuation.
 
 ## Next recommended step
 
-Complete the Phase 7 privacy and outbound-network audit, including packaged dependency/runtime behavior, before declaring the phase complete.
+Begin Phase 8 by choosing and documenting the Windows desktop shell and bundled-runtime strategy before implementing the installer or `.exe`.
 
 ## Important architectural notes
 
@@ -231,6 +244,7 @@ Complete the Phase 7 privacy and outbound-network audit, including packaged depe
 - Loopback authority checks, browser-origin defenses, the mutation header, defensive response headers, and the deliberately unauthenticated local-process trust boundary are defined by ADR 0025.
 - Privacy-safe structured event fields, dependency-log suppression, migration failure sanitization, and the no-path diagnostics boundary are defined by ADR 0026.
 - Double no-follow parser preflight, cancelled-queue purging, cooperative shutdown, normal-user permissions, and residual process-isolation risks are defined by ADR 0027.
+- Source/dependency/runtime network auditing, explicit unused-surface removal, future online-feature controls, and packaging re-verification are defined by ADR 0028.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
 - Phase 8 will choose and implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
 - The desktop shell remains deferred until its owning phase.
