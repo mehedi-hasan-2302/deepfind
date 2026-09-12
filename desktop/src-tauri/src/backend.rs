@@ -32,10 +32,12 @@ impl Backend {
         if !java.is_file() || !jar.is_file() {
             return Err("RESOURCES_MISSING");
         }
-        let mut command = Command::new(java);
+        // Tauri canonicalizes to a Windows verbatim (\\?\) path. The JVM JAR launcher
+        // cannot load Boot's entry class from that spelling; simplify representable paths.
+        let mut command = Command::new(dunce::simplified(&java));
         command
             .args(["-Xmx512m", "-jar"])
-            .arg(jar)
+            .arg(dunce::simplified(&jar))
             .args([
                 "--deepfind.desktop=true",
                 "--server.address=127.0.0.1",
@@ -221,6 +223,16 @@ pub fn allowed_navigation(url: &Url, port: Option<u16>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn bundled_jar_path_uses_java_compatible_windows_spelling() {
+        let verbatim = std::path::Path::new(r"\\?\C:\Program Files\DeepFind\deepfind-backend.jar");
+        assert_eq!(
+            dunce::simplified(verbatim),
+            std::path::Path::new(r"C:\Program Files\DeepFind\deepfind-backend.jar")
+        );
+    }
 
     #[test]
     fn handshake_accepts_only_a_valid_port_event() {

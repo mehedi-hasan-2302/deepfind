@@ -85,6 +85,8 @@ The handshake mechanism will be selected during implementation. A captured stdou
 
 ## Acceptance evidence
 
+The locally verified unsigned 0.1.0 installer is available. See [the exact artifact and test record](WINDOWS_PREVIEW_VERIFICATION.md) and [installation/build instructions](INSTALLATION.md). This preview does not yet satisfy the clean-machine and full manual UI release gates below.
+
 Phase 8 is complete only when:
 
 - installation and first launch work without developer tools or an internet connection;

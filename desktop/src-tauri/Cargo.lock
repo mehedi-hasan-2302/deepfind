@@ -671,6 +671,7 @@ dependencies = [
 name = "deepfind-desktop"
 version = "0.1.0"
 dependencies = [
+ "dunce",
  "tauri",
  "tauri-build",
  "tauri-plugin-single-instance",

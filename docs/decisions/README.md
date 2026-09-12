@@ -31,3 +31,5 @@ Architecture decisions use lightweight records with context, decision, alternati
 - [0027 — Harden the cooperative parser boundary](0027-harden-cooperative-parser-boundary.md)
 - [0028 — Verify deny-by-design runtime networking](0028-verify-deny-by-design-runtime-networking.md)
 - [0029 — Use Tauri with a bundled Java runtime](0029-use-tauri-with-bundled-java-runtime.md)
+- [0030 — Supervise the packaged Windows backend](0030-supervise-the-packaged-windows-backend.md)
+- [0031 — Reject WebView HTTP egress within the application](0031-reject-webview-http-egress.md)

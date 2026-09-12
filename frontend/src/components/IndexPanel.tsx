@@ -83,7 +83,7 @@ export function IndexPanel({
             ) : null}
           </div>
         </div>
-        <p className="field-help">Enter a full folder path. A native folder picker will arrive with desktop packaging.</p>
+        <p className="field-help">Enter a full folder path. This preview uses a typed path rather than a folder browser.</p>
       </form>
 
       <section className="exclusion-settings" aria-labelledby="exclusion-heading">

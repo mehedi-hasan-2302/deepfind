@@ -2,14 +2,16 @@
 
 ## Current phase
 
-Phase 8 — Desktop Packaging (in progress)
+Phase 8 — Desktop Packaging (installable unsigned preview delivered; clean-machine acceptance pending)
 
 ## Last completed step
 
-STEP 30 — Compile and open the native Tauri desktop shell.
+STEP 32 — Build and locally verify the Windows preview installer.
 
 ## Completed
 
+- STEP 32: `artifacts/DeepFind-Setup.exe` built successfully and tested as a per-user installation in a path containing spaces. Bundled-runtime launch, installed PDF/DOCX/text search, watching, duplicate launch, normal shutdown, restart persistence, backend recovery, shell-crash cleanup, open/reveal, sampled network checks, and uninstall/data preservation passed. The test installation was removed; the installer remains. See [the exact artifact and verification record](WINDOWS_PREVIEW_VERIFICATION.md) and [the learning/install guide](INSTALLATION.md). This is an unsigned preview, not a clean-machine production sign-off.
+- STEP 31: native shell now supervises the packaged Java backend, handles Windows resource paths correctly, displays local startup/recovery/closing pages, and uses an app-only rejecting WebView HTTP/HTTPS proxy. Four release-profile Rust tests passed. Third-party notices are included. See ADRs 0030 and 0031.
 - STEP 30: Rust 1.98.1/MSVC toolchain installed, Tauri 2.11.5 shell compiled, bundled local page verified in a real Windows window through accessibility, and window closed successfully. Screenshot capture is unavailable on this Windows capture interface (`SetIsBorderRequired`, 0x80004002); accessibility verification works. The first executable is a shell spike, not yet the final integrated application.
 - STEP 29: desktop Maven resource profile, production UI CSP/security headers, inherited-pipe readiness/shutdown protocol, repeatable preparation script, and private Java 21 image. Isolated bundled-runtime smoke testing passed text/PDF/DOCX extraction, live watching, SQLite/Lucene restart persistence, and graceful shutdown. Rust and Microsoft C++ Build Tools 2022 are installed; native shell compilation is in progress.
 - Java 21 / Spring Boot 4.1.1 backend with Maven Wrapper, formatting gate, loopback-only configuration, and `/api/health`.
@@ -222,13 +224,15 @@ The user can index a local folder, safely pause after bounded in-flight work, an
 
 ## Known failures
 
-STEP 29 verification: 107 backend tests discovered (104 passing, 3 skipped), 14 frontend tests passing; `scripts/prepare-desktop.ps1` and `scripts/test-desktop-runtime.ps1` passed. The first native compile ran before the C++ toolchain installation finished and failed with missing `link.exe`; it is now being retried. An intermediate packaging run failed the formatter on newly added lifecycle files; formatting was applied and the complete run passed.
+STEP 29 verification: 107 backend tests discovered (104 passing, 3 skipped), 14 frontend tests passing; `scripts/prepare-desktop.ps1` and `scripts/test-desktop-runtime.ps1` passed. Toolchain installation and formatting failures were resolved. The integrated shell exposed two startup defects: resolving a page relative to temporary `about:blank`, and passing a Windows verbatim JAR path to Java. Both were corrected; a release launch reached the working React interface, and normal close returned exit code 0 with Java cleanup. Windows debug linking later failed with PDB `FILE_SYSTEM (3)`; the reproducible packaging script now tests the release profile. Generated debug outputs were removed to recover disk space.
 
-No product failures recorded. Maven is not installed globally, so all backend commands use the checked-in wrapper; its Windows launcher includes a compatibility guard for a normal, non-symbolic-link `.m2` directory. In restricted Windows environments Maven clean/Spotless may need permission to replace the generated `backend\target` tree. Rust/Cargo and the Windows installer toolchain are not installed yet, so no desktop executable exists. Tests emit non-failing Mockito future-JDK and Lucene optional-vector-optimization warnings. Symlink behavior is covered conditionally and should also run in CI on a host that permits symlink creation. Native watch providers may duplicate, coalesce, reorder, or overflow events; scheduled reconciliation repairs uncertainty eventually, not as an atomic snapshot. Extraction timeouts use cooperative thread interruption, not hard process isolation; cancelled queue entries are purged, but a parser that ignores interruption can retain one bounded worker until it exits. No-follow checks reject static symbolic links, but a same-user process can still replace a path after the worker's final check. The runtime connection audit is sampled evidence rather than proof of every possible third-party path and must be rerun after dependency, parser, or packaging changes. Build tools still contact configured dependency repositories. Lucene schema versions 1 and 2 are rejected and require manual local-index removal/rebuild until rebuild controls exist. Scanned PDFs require future OCR. The unencrypted local index stores extraction-bounded source text for snippets, and the unencrypted SQLite database stores local paths, failure descriptions, counters, and timestamps. A corrupt or invalidly migrated SQLite database intentionally prevents startup until preserved and repaired or deliberately replaced. Interrupted runs restart as full root reconciliation scans rather than unsafe mid-tree continuation.
+Maven uses the checked-in wrapper. Rust/MSVC and NSIS are installed. Restricted Windows builds may require permission to replace generated output. Do not rebuild or bundle while a test application is using its adjacent Java runtime: Windows locks those DLLs. The first full desktop network audit observed a WebView2 external HTTPS connection; after adding an app-scoped rejecting HTTP/HTTPS proxy, two installed-process-tree audits passed. See ADR 0031 for limits rather than relying on the earlier backend-only audit. Final NSIS packaging initially timed out; retrying the bundler succeeded. The installed uninstaller finishes through an asynchronous worker, so checks must wait for both executable and registration removal.
+
+Remaining product limitations: conditional symlink tests, native watcher uncertainty repaired by reconciliation, cooperative parser interruption rather than hard isolation, same-user path-replacement races, no OCR, and an unencrypted local index/database. Older Lucene schemas need deliberate rebuild; corrupt SQLite state intentionally prevents startup and must be preserved before repair. Interrupted runs use reconciliation rather than unsafe cursor continuation. The preview still uses a typed folder path. Clean-machine offline verification and publisher signing remain separate release gates.
 
 ## Next recommended step
 
-Finish native shell compilation and window verification, connect the tested bundled backend, and produce the per-user NSIS installer. No installer is ready yet.
+Install the unsigned preview from `artifacts/DeepFind-Setup.exe` and perform manual UI acceptance. For production release, run the separate clean offline Windows VM checks and arrange publisher signing. No additional feature module is required merely to try this preview. See [WINDOWS_PREVIEW_VERIFICATION.md](WINDOWS_PREVIEW_VERIFICATION.md) for exact evidence and limitations.
 
 ## Important architectural notes
 
@@ -259,5 +263,5 @@ Finish native shell compilation and window verification, connect the tested bund
 - Source/dependency/runtime network auditing, explicit unused-surface removal, future online-feature controls, and packaging re-verification are defined by ADR 0028.
 - Tauri shell selection, bundled Java runtime, same-origin loopback UI, supervisor lifecycle, per-user offline installer, and packaging acceptance criteria are defined by ADR 0029.
 - Progress checkpoints are intentionally bounded; abrupt termination may lose up to one checkpoint interval of counters, never committed Lucene data.
-- Phase 8 uses Tauri 2 and will implement a self-contained Windows desktop shell/installer. The production `.exe` must bundle its runtime, supervise backend health/lifecycle, use the documented data directory, and require no developer tools.
+- Phase 8 implements a Tauri 2 desktop shell/installer with a private runtime, backend supervision, and the documented data directory. The unsigned preview is available; clean-machine production acceptance remains separate.
 - Desktop implementation follows the staged spike, backend artifact, supervision, lifecycle, installer, and clean-machine verification plan in `docs/PACKAGING.md`.

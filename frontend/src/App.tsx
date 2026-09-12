@@ -245,7 +245,7 @@ function App() {
         </a>
         <aside className="privacy-note" aria-label="Privacy promise">
           <strong>Your files stay on your computer.</strong>
-          <span>No account, analytics, or document uploads.</span>
+          <span>No account. DeepFind does not upload your documents.</span>
         </aside>
       </header>
 

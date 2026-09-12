@@ -22,7 +22,8 @@
     "category": "Utility",
     "resources": {
       "resources/runtime/": "runtime/",
-      "resources/deepfind-backend.jar": "deepfind-backend.jar"
+      "resources/deepfind-backend.jar": "deepfind-backend.jar",
+      "resources/notices/": "notices/"
     },
     "windows": {
       "webviewInstallMode": { "type": "offlineInstaller" },

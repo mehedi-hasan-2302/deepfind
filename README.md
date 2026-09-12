@@ -69,7 +69,9 @@ The audit starts the JAR with temporary local state, confirms loopback health, r
 
 ## Packaging
 
-Desktop packaging is in progress in Phase 8. Tauri 2 will own the Windows window and lifecycle, while an application-specific Java 21 runtime and Spring Boot backend are bundled as local resources. The production frontend will be served from that backend on an ephemeral IPv4 loopback port, preserving relative same-origin API calls. The target artifacts are an installed `DeepFind.exe` and per-user, offline-capable `DeepFind-Setup.exe`; no automatic updater is planned for the MVP. See the [desktop packaging plan](docs/PACKAGING.md) and [ADR 0029](docs/decisions/0029-use-tauri-with-bundled-java-runtime.md).
+For the executable build steps, preview installation instructions, data location, and verification limits, see the [Windows installation guide](docs/INSTALLATION.md). The repeatable installer build command is `./scripts/build-desktop.ps1` from the repository root in PowerShell.
+
+The Windows desktop implementation uses Tauri 2 to own the window and backend lifecycle. A private Java 21 runtime and Spring Boot backend are bundled as local resources, and the compiled frontend is served from that backend on an ephemeral IPv4 loopback port. The setup installs `DeepFind.exe` together with its required resources; copying the launcher alone is not sufficient. The unsigned preview has no DeepFind automatic updater. See the [installation guide](docs/INSTALLATION.md), [verification record](docs/PROGRESS.md), and [desktop packaging plan](docs/PACKAGING.md) for remaining release gates.
 
 ## Local data
 

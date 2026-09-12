@@ -3,6 +3,7 @@
 mod backend;
 #[cfg(windows)]
 mod job;
+mod offline_proxy;
 
 use backend::Backend;
 use std::{
@@ -36,11 +37,15 @@ fn main() {
             }
         })
         .setup(move |app| {
+            let proxy = offline_proxy::OfflineProxy::start()?;
+            let proxy_url = proxy.url();
+            app.manage(proxy);
             let port = Arc::new(Mutex::new(None));
             let navigation_port = port.clone();
             let window =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                     .title("DeepFind")
+                    .proxy_url(proxy_url)
                     .inner_size(1200.0, 820.0)
                     .min_inner_size(720.0, 560.0)
                     .on_navigation(move |url| {
@@ -52,8 +57,10 @@ fn main() {
                     .on_new_window(|_, _| NewWindowResponse::Deny)
                     .on_download(|_, _| false)
                     .build()?;
-            let local_origin = window.url()?;
-            let recovery = local_origin.join("recovery.html")?;
+            // During creation url() can still be about:blank, which cannot resolve relative URLs.
+            let recovery = "http://tauri.localhost/recovery.html"
+                .parse()
+                .expect("local URL");
             let app_handle = app.handle().clone();
             thread::spawn(move || {
                 match worker_backend.start(&app_handle) {
@@ -68,6 +75,10 @@ fn main() {
                                 thread::sleep(Duration::from_millis(500));
                             }
                         }
+                    }
+                    Err(code) => {
+                        // Only a fixed supervisor category; never print backend output or private paths.
+                        eprintln!("event=desktop_start_failed reason={code}");
                     }
                     _ => {}
                 }
